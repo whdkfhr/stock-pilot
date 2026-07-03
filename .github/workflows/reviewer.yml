@@ -1,0 +1,141 @@
+name: Reviewer Agent
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  reviewer:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check API key
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY is not set. Reviewer Agent requires API access."
+            echo "Skipping automated review. Please review manually."
+            exit 0
+          fi
+          echo "has_key=true" >> "$GITHUB_ENV"
+
+      - name: Checkout
+        if: env.has_key == 'true'
+        uses: actions/checkout@v4
+
+      - name: Get PR diff
+        if: env.has_key == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr diff ${{ github.event.pull_request.number }} | head -c 8000 > /tmp/pr_diff.txt
+
+      - name: Resolve TASK and DESIGN from PR title
+        if: env.has_key == 'true'
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          # Extract padded issue number from title format: "feat: TASK-001 - ..."
+          TASK_ID=$(echo "$PR_TITLE" | grep -oP 'TASK-\K\d+' | head -1)
+          if [ -z "$TASK_ID" ]; then
+            echo "WARN: Could not extract TASK ID from PR title. Proceeding without task context."
+            TASK_ID="000"
+          fi
+          TASK_ID=$(printf '%03d' $TASK_ID)
+          echo "TASK_ID=${TASK_ID}" >> $GITHUB_ENV
+
+      - name: Call Claude — Reviewer
+        if: env.has_key == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          TASK_FILE="docs/tasks/TASK-${{ env.TASK_ID }}.md"
+          DESIGN_FILE="docs/design/DESIGN-${{ env.TASK_ID }}.md"
+
+          # Build context: reviewer prompt + TASK + DESIGN + PR diff
+          SYSTEM=$(jq -Rs . < .claude/agents/reviewer.md)
+
+          TASK_CONTENT=$([ -f "$TASK_FILE" ] && cat "$TASK_FILE" || echo "(TASK not found)")
+          DESIGN_CONTENT=$([ -f "$DESIGN_FILE" ] && cat "$DESIGN_FILE" || echo "(DESIGN not found)")
+          DIFF_CONTENT=$(cat /tmp/pr_diff.txt)
+
+          USER_MSG=$(jq -n \
+            --arg pr "PR: $PR_TITLE" \
+            --arg task "$TASK_CONTENT" \
+            --arg design "$DESIGN_CONTENT" \
+            --arg diff "$DIFF_CONTENT" \
+            '$pr + "\n\n## TASK\n" + $task + "\n\n## DESIGN\n" + $design + "\n\n## PR Diff\n" + $diff')
+
+          curl -sf https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "{
+              \"model\": \"claude-sonnet-4-6\",
+              \"max_tokens\": 4000,
+              \"system\": $SYSTEM,
+              \"messages\": [{\"role\": \"user\", \"content\": $USER_MSG}]
+            }" | jq -r '.content[0].text' > /tmp/review_result.txt
+
+      - name: Post review comment
+        if: env.has_key == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "## Reviewer Agent Report
+
+          $(cat /tmp/review_result.txt)"
+
+      - name: Register Review to Server
+        if: env.has_key == 'true'
+        run: |
+          STATUS=$(grep -q "^APPROVED" /tmp/review_result.txt && echo "APPROVED" || echo "REJECTED")
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          REVIEW_CONTENT=$(cat /tmp/review_result.txt)
+
+          curl -sf -X POST "${{ secrets.SERVER_URL || 'https://dev-agent-production-1459.up.railway.app' }}/reviews" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg reviewId "REVIEW-${{ env.TASK_ID }}-${PR_NUMBER}" \
+              --arg implId "IMPL-${{ env.TASK_ID }}" \
+              --arg taskId "TASK-${{ env.TASK_ID }}" \
+              --arg status "$STATUS" \
+              --argjson comments "$(echo "$REVIEW_CONTENT" | jq -R . | jq -s .)" \
+              '{reviewId: $reviewId, implId: $implId, taskId: $taskId, status: $status, comments: $comments}')" && \
+          echo "Review registered to server" || \
+          echo "WARN: Failed to register review to server (non-blocking)"
+
+      - name: Approve or Request Changes
+        if: env.has_key == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if grep -q "^APPROVED" /tmp/review_result.txt; then
+            # Note: github-actions[bot] cannot approve its own PR.
+            # Auto-merge is used instead of approve.
+            gh pr merge ${{ github.event.pull_request.number }} \
+              --squash --auto \
+              --body "Reviewer Agent: APPROVED — auto-merged" || \
+            gh pr comment ${{ github.event.pull_request.number }} \
+              --body "Reviewer Agent: APPROVED — please merge manually."
+          else
+            gh pr comment ${{ github.event.pull_request.number }} \
+              --body "Reviewer Agent: REJECTED — see review comment for details"
+
+            # Trigger Self-Healing: add review_failed label to linked issue
+            ISSUE_NUMBER=$(gh pr view ${{ github.event.pull_request.number }} \
+              --json closingIssuesReferences \
+              --jq '.closingIssuesReferences[0].number // empty')
+
+            if [ -n "$ISSUE_NUMBER" ]; then
+              gh issue edit $ISSUE_NUMBER --add-label "review_failed"
+              echo "Self-Healing triggered: review_failed label added to issue #${ISSUE_NUMBER}"
+            fi
+          fi

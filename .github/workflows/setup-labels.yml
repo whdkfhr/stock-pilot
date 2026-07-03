@@ -1,0 +1,44 @@
+name: Setup Labels
+
+on:
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  setup-labels:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create pipeline labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          create_label() {
+            NAME=$1
+            COLOR=$2
+            DESC=$3
+            gh label create "$NAME" --color "$COLOR" --description "$DESC" --force \
+              --repo "$REPO"
+          }
+
+          # Agent trigger labels
+          create_label "plan"         "0075ca" "Planner Agent 실행"
+          create_label "design"       "e4e669" "Architect Agent 실행"
+          create_label "implement"    "d93f0b" "Implementer Agent 실행"
+          create_label "review"       "0e8a16" "Reviewer Agent 대기"
+
+          # Self-Healing labels
+          create_label "review_failed" "b60205" "Reviewer REJECTED — Self-Healing 시작"
+          create_label "fixing"        "f9d0c4" "Fix Agent 실행 중"
+          create_label "retry_1"       "fef2c0" "자동 수정 1회차"
+          create_label "retry_2"       "fef2c0" "자동 수정 2회차"
+          create_label "retry_3"       "fef2c0" "자동 수정 3회차"
+          create_label "fix_failed"    "000000" "3회 초과 — 수동 개입 필요"
+
+          # Terminal labels
+          create_label "done"          "0e8a16" "파이프라인 완료"
+
+          echo "All labels created successfully."

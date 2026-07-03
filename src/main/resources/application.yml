@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: stock-pilot
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/stockpilot}
+    username: ${DB_USERNAME:stockpilot}
+    password: ${DB_PASSWORD:stockpilot}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${KAFKA_GROUP_ID:stock-pilot}
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+# Application-specific settings (JWT etc.)
+stockpilot:
+  jwt:
+    secret: ${JWT_SECRET:change-me-in-prod-this-is-a-32byte-minimum-dev-secret}
+    access-token-validity-seconds: ${JWT_ACCESS_TTL:3600}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics
+  metrics:
+    tags:
+      application: stock-pilot
+
+server:
+  port: ${SERVER_PORT:8080}
