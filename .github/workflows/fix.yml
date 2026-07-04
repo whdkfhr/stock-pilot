@@ -1,0 +1,139 @@
+name: Fix Agent
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    if: github.event.label.name == 'review_failed'
+
+    steps:
+      - name: Checkout (all branches)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve PR / branch / retry count
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TASK_ID=$(printf '%03d' ${{ github.event.issue.number }})
+          BRANCH="feature/task-${TASK_ID}"
+          PR_NUMBER=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -z "$PR_NUMBER" ]; then
+            echo "ERROR: $BRANCH 에 대한 열린 PR이 없어 수정할 수 없습니다."
+            exit 1
+          fi
+          PREV=$(gh issue view ${{ github.event.issue.number }} --json labels \
+            --jq '[.labels[].name | select(startswith("retry_"))] | length')
+          RETRY_N=$((PREV + 1))
+          echo "TASK_ID=${TASK_ID}" >> $GITHUB_ENV
+          echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
+          echo "PR_NUMBER=${PR_NUMBER}" >> $GITHUB_ENV
+          echo "RETRY_N=${RETRY_N}" >> $GITHUB_ENV
+
+      - name: Enforce retry limit (max 3)
+        env:
+          GH_TOKEN: ${{ secrets.PIPELINE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ env.RETRY_N }}" -gt 3 ]; then
+            gh issue edit ${{ github.event.issue.number }} --remove-label "review_failed" --add-label "fix_failed" || true
+            gh pr comment ${{ env.PR_NUMBER }} --body "Fix Agent: 3회 재시도 초과 — 자동 수정 중단, 수동 개입 필요 (fix_failed)."
+            echo "stop=true" >> $GITHUB_ENV
+          fi
+
+      - name: Checkout feature branch
+        if: env.stop != 'true'
+        run: git checkout ${{ env.BRANCH }}
+
+      - name: Collect review report + current diff
+        if: env.stop != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr diff ${{ env.PR_NUMBER }} | head -c 40000 > /tmp/current_diff.txt
+          gh pr view ${{ env.PR_NUMBER }} --json comments \
+            --jq '[.comments[] | select(.body|contains("Reviewer Agent Report")) | .body] | last // "(no review)"' \
+            > /tmp/review_report.txt
+
+      - name: Call Claude — Fix Agent
+        if: env.stop != 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          TASK_FILE="docs/tasks/TASK-${{ env.TASK_ID }}.md"
+          DESIGN_FILE="docs/design/DESIGN-${{ env.TASK_ID }}.md"
+
+          SYSTEM=$(jq -Rs . < .claude/agents/fix-agent.md)
+          USER_MSG=$(jq -n \
+            --rawfile task "$TASK_FILE" \
+            --rawfile design "$DESIGN_FILE" \
+            --rawfile review /tmp/review_report.txt \
+            --rawfile diff /tmp/current_diff.txt \
+            '"## TASK\n" + $task + "\n\n## DESIGN\n" + $design + "\n\n## Reviewer Report (해결 대상)\n" + $review + "\n\n## 현재 코드 (PR Diff)\n" + $diff')
+
+          curl -sf https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "{
+              \"model\": \"claude-sonnet-5\",
+              \"thinking\": {\"type\": \"disabled\"},
+              \"max_tokens\": 8000,
+              \"system\": $SYSTEM,
+              \"messages\": [{\"role\": \"user\", \"content\": $USER_MSG}]
+            }" | jq -r '.content[0].text' > /tmp/fix_output.txt
+
+      - name: Apply patch (parse + strip code fences)
+        if: env.stop != 'true'
+        run: |
+          python3 << 'PYEOF'
+          import re, os
+          with open('/tmp/fix_output.txt') as f:
+              text = f.read()
+          pattern = r'--- FILE: (.+?) ---\n(.*?)--- END FILE ---'
+          files = re.findall(pattern, text, re.DOTALL)
+          if not files:
+              print('WARNING: No file blocks found in Fix Agent output.')
+          else:
+              for path, content in files:
+                  path = path.strip()
+                  c = content.strip()
+                  cl = c.split('\n')
+                  if cl and cl[0].lstrip().startswith('```'):
+                      cl = cl[1:]
+                  if cl and cl[-1].strip() == '```':
+                      cl = cl[:-1]
+                  c = '\n'.join(cl).strip()
+                  os.makedirs(os.path.dirname(path), exist_ok=True)
+                  with open(path, 'w') as fout:
+                      fout.write(c + '\n')
+                  print(f'Patched: {path}')
+          PYEOF
+
+      - name: Commit and push patch
+        if: env.stop != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --staged --quiet || \
+            git commit -m "fix: patch TASK-${{ env.TASK_ID }} retry-${{ env.RETRY_N }} by Fix Agent"
+          git push origin ${{ env.BRANCH }}
+
+      - name: Re-request review
+        if: env.stop != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PIPELINE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit ${{ github.event.issue.number }} --add-label "retry_${{ env.RETRY_N }}" || true
+          gh issue edit ${{ github.event.issue.number }} --remove-label "review_failed" || true
+          gh issue edit ${{ github.event.issue.number }} --add-label "review"
+          gh pr comment ${{ env.PR_NUMBER }} --body "Fix Agent: 패치 적용 (retry ${{ env.RETRY_N }}/3). Reviewer 재실행합니다."

@@ -169,16 +169,9 @@ jobs:
           echo "PullRequest registered to server" || \
           echo "WARN: Failed to register pull request to server (non-blocking)"
 
-      - name: Nudge Reviewer (PAT push → synchronize)
+      - name: Request Review (이슈에 review 라벨 → Reviewer 트리거)
         if: env.PR_NUMBER != ''
         env:
-          PAT: ${{ secrets.PIPELINE_TOKEN }}
+          GH_TOKEN: ${{ secrets.PIPELINE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
-          if [ -n "$PAT" ]; then
-            git remote set-url origin https://x-access-token:${PAT}@github.com/${{ github.repository }}.git
-            git commit --allow-empty -m "chore: trigger reviewer [pipeline]"
-            git push origin ${{ env.BRANCH }}
-            echo "Reviewer nudged via synchronize event"
-          else
-            echo "PIPELINE_TOKEN 미설정 → 리뷰어 수동 트리거 필요"
-          fi
+          gh issue edit ${{ github.event.issue.number }} --add-label "review"
