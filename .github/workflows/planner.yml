@@ -79,5 +79,5 @@ jobs:
 
       - name: Trigger Architect
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PIPELINE_TOKEN || secrets.GITHUB_TOKEN }}
         run: gh issue edit ${{ github.event.issue.number }} --add-label "design"

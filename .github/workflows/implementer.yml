@@ -111,7 +111,7 @@ jobs:
 
       - name: Create Pull Request
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PIPELINE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           PR_URL=$(gh pr create \
             --title "feat: TASK-${{ env.TASK_ID }} - ${{ github.event.issue.title }}" \
