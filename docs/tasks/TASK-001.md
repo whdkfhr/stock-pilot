@@ -69,5 +69,5 @@ None
   - 동일 이메일 동시 가입 요청 시 데이터 정합성 검증
 
 ## Status
-TODO
+IN_PROGRESS
 ```
