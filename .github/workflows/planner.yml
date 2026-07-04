@@ -2,7 +2,7 @@ name: Planner Agent
 
 on:
   issues:
-    types: [opened]
+    types: [labeled]
 
 permissions:
   contents: write
@@ -11,8 +11,8 @@ permissions:
 jobs:
   planner:
     runs-on: ubuntu-latest
-    # 소유자가 연 이슈에만 실행 (public 리포에서 타인 이슈로 크레딧 소모 방지)
-    if: github.event.issue.user.login == github.repository_owner
+    # 'plan' 라벨이 붙은 이슈만 파이프라인 진입 (라벨 부착 권한=triage 이상 → 접근제어 역할)
+    if: github.event.label.name == 'plan'
 
     steps:
       - name: Checkout

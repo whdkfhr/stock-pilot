@@ -12,7 +12,7 @@ permissions:
 jobs:
   implementer:
     runs-on: ubuntu-latest
-    if: github.event.label.name == 'implement' && github.event.issue.user.login == github.repository_owner
+    if: github.event.label.name == 'implement'
 
     steps:
       - name: Checkout develop

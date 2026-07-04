@@ -42,7 +42,7 @@ docker compose up -d
 GitHub Issue 하나가 Planner → Architect → Implementer → Reviewer를 거쳐 자동으로 PR이 된다.
 
 ```
-Issue opened ──▶ Planner ──(label: design)──▶ Architect ──(label: implement)──▶ Implementer ──▶ PR ──▶ Reviewer
+Issue + `plan` 라벨 ──▶ Planner ──(label: design)──▶ Architect ──(label: implement)──▶ Implementer ──▶ PR ──▶ Reviewer
                   │                              │                                │                      │
               docs/tasks/                   docs/design/                    feature/task-NNN 브랜치   APPROVE→auto-merge
                                                                                                        REJECT→review_failed
@@ -71,7 +71,8 @@ Issue opened ──▶ Planner ──(label: design)──▶ Architect ──(l
 
 ### 사용
 
-1. 로드맵의 한 항목을 GitHub Issue로 등록 → Planner가 자동 시작.
+1. 로드맵의 한 항목을 GitHub Issue로 등록하고 **`plan` 라벨을 붙이면** Planner가 시작한다.
+   (라벨은 triage 이상 권한자만 부착 가능 → 파이프라인 트리거 = 접근제어 겸 비용 게이트. 팀 전환 시 그대로 확장된다.)
 2. `docs/tasks/TASK-NNN.md` → `docs/design/DESIGN-NNN.md` → `feature/task-NNN` PR 순으로 진행.
 3. Reviewer가 APPROVED → `develop`에 자동 병합, REJECTED → 이슈에 `review_failed` 라벨.
 
