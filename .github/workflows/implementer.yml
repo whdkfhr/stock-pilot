@@ -82,9 +82,17 @@ jobs:
               with open('/tmp/generated_files.txt', 'w') as f:
                   for path, content in files:
                       path = path.strip()
+                      c = content.strip()
+                      cl = c.split('\n')
+                      # 모델이 붙인 ```lang / ``` 코드펜스 제거 (컴파일 불가 방지)
+                      if cl and cl[0].lstrip().startswith('```'):
+                          cl = cl[1:]
+                      if cl and cl[-1].strip() == '```':
+                          cl = cl[:-1]
+                      c = '\n'.join(cl).strip()
                       os.makedirs(os.path.dirname(path), exist_ok=True)
                       with open(path, 'w') as fout:
-                          fout.write(content.strip() + '\n')
+                          fout.write(c + '\n')
                       f.write(path + '\n')
                       print(f'Written: {path}')
           PYEOF
@@ -160,3 +168,17 @@ jobs:
               '{prId: $prId, taskId: $taskId, implId: $implId, reviewId: $reviewId, title: $title, body: $body, prUrl: $prUrl, status: $status}')" && \
           echo "PullRequest registered to server" || \
           echo "WARN: Failed to register pull request to server (non-blocking)"
+
+      - name: Nudge Reviewer (PAT push → synchronize)
+        if: env.PR_NUMBER != ''
+        env:
+          PAT: ${{ secrets.PIPELINE_TOKEN }}
+        run: |
+          if [ -n "$PAT" ]; then
+            git remote set-url origin https://x-access-token:${PAT}@github.com/${{ github.repository }}.git
+            git commit --allow-empty -m "chore: trigger reviewer [pipeline]"
+            git push origin ${{ env.BRANCH }}
+            echo "Reviewer nudged via synchronize event"
+          else
+            echo "PIPELINE_TOKEN 미설정 → 리뷰어 수동 트리거 필요"
+          fi

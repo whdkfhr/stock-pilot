@@ -36,7 +36,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr diff ${{ github.event.pull_request.number }} | head -c 8000 > /tmp/pr_diff.txt
+          gh pr diff ${{ github.event.pull_request.number }} | head -c 40000 > /tmp/pr_diff.txt
 
       - name: Resolve TASK and DESIGN from PR title
         if: env.has_key == 'true'
