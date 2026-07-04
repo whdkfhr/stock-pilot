@@ -68,13 +68,16 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          TASK_FILE="docs/tasks/TASK-${{ env.TASK_ID }}.md"
-          DESIGN_FILE="docs/design/DESIGN-${{ env.TASK_ID }}.md"
+          # 프롬프트·TASK·DESIGN은 default 브랜치(develop)에서 읽는다
+          # (feature 브랜치엔 최신 프롬프트/문서가 없을 수 있음)
+          git show origin/develop:.claude/agents/fix-agent.md > /tmp/fix_agent.md
+          git show origin/develop:docs/tasks/TASK-${{ env.TASK_ID }}.md > /tmp/task.md 2>/dev/null || echo "(TASK not found)" > /tmp/task.md
+          git show origin/develop:docs/design/DESIGN-${{ env.TASK_ID }}.md > /tmp/design.md 2>/dev/null || echo "(DESIGN not found)" > /tmp/design.md
 
-          SYSTEM=$(jq -Rs . < .claude/agents/fix-agent.md)
+          SYSTEM=$(jq -Rs . < /tmp/fix_agent.md)
           USER_MSG=$(jq -n \
-            --rawfile task "$TASK_FILE" \
-            --rawfile design "$DESIGN_FILE" \
+            --rawfile task /tmp/task.md \
+            --rawfile design /tmp/design.md \
             --rawfile review /tmp/review_report.txt \
             --rawfile diff /tmp/current_diff.txt \
             '"## TASK\n" + $task + "\n\n## DESIGN\n" + $design + "\n\n## Reviewer Report (해결 대상)\n" + $review + "\n\n## 현재 코드 (PR Diff)\n" + $diff')
