@@ -2,6 +2,7 @@ package com.arok2.stockpilot.controller;
 
 import com.arok2.stockpilot.domain.InvestmentPeriod;
 import com.arok2.stockpilot.domain.RiskProfile;
+import com.arok2.stockpilot.domain.User;
 import com.arok2.stockpilot.dto.request.SignupRequest;
 import com.arok2.stockpilot.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,8 +13,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -22,8 +27,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * 회원가입 API의 End-to-End 시나리오(성공/검증 실패/중복 이메일)를 실제 Spring 컨텍스트와
- * MockMvc를 통해 검증한다. 기본 테스트 프로파일의 인메모리(H2) DB를 사용하여
- * 실제 유니크 제약 및 예외 변환 경로까지 함께 검증한다.
+ * MockMvc를 통해 검증한다. 테스트 프로파일의 인메모리(H2, PostgreSQL 호환 모드) DB에
+ * Flyway 마이그레이션(V1__create_users_table.sql)이 실제로 적용되어 유니크 제약 및
+ * 스키마가 운영 환경과 동일하게 구성됨을 전제로 한다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -37,6 +43,9 @@ class AuthControllerIntegrationTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @AfterEach
     void tearDown() {
@@ -64,6 +73,34 @@ class AuthControllerIntegrationTest {
                 .andExpect(jsonPath("$.id", notNullValue()))
                 .andExpect(jsonPath("$.email", is("e2e-success@example.com")))
                 .andExpect(jsonPath("$.nickname", is("nickname")));
+    }
+
+    @Test
+    void 가입_성공후_DB에_저장된_비밀번호는_평문과_다르고_BCrypt_형식이다() throws Exception {
+        String rawPassword = "password123";
+        SignupRequest request = new SignupRequest(
+                "e2e-password-check@example.com",
+                rawPassword,
+                "nickname",
+                RiskProfile.STABLE,
+                InvestmentPeriod.LONG_TERM
+        );
+
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+
+        Optional<User> saved = userRepository.findAll().stream()
+                .filter(u -> u.getEmail().equals("e2e-password-check@example.com"))
+                .findFirst();
+
+        assertThat(saved).isPresent();
+        String storedHash = saved.get().getPasswordHash();
+
+        assertThat(storedHash).isNotEqualTo(rawPassword);
+        assertThat(storedHash).matches("^\\$2[aby]\\$.*");
+        assertThat(passwordEncoder.matches(rawPassword, storedHash)).isTrue();
     }
 
     @Test

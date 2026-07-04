@@ -1,30 +1,14 @@
-# Test profile: in-memory H2 so contextLoads runs without live infra.
-# Integration tests that need real Postgres/Kafka should use Testcontainers explicitly.
 spring:
   datasource:
-    url: jdbc:h2:mem:stockpilot;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    url: jdbc:h2:mem:stockpilot;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
     username: sa
     password:
-    driver-class-name: org.h2.Driver
-
   jpa:
     hibernate:
-      ddl-auto: create-drop
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.H2Dialect
-
-  data:
-    redis:
-      host: localhost
-      port: 6379
-
-  kafka:
-    bootstrap-servers: localhost:9092
-    listener:
-      auto-startup: false
-
-stockpilot:
-  jwt:
-    secret: test-secret-that-is-at-least-32-bytes-long-000
-    access-token-validity-seconds: 3600
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+---END FILE---

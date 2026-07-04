@@ -26,20 +26,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 동일 이메일로 동시에 다수의 가입 요청이 발생해도 최종적으로 하나의 계정만
- * 생성되는지 실제 Spring 컨텍스트(및 실제 DB 유니크 제약)를 통해 검증한다.
+ * 생성되는지 실제 Spring 컨텍스트를 통해 검증한다.
+ *
+ * 본 테스트가 검증하는 정합성 보장의 실제 근거는 애플리케이션 코드(사전 검사 +
+ * 예외 변환)가 아니라 users.email 컬럼에 걸린 DB 유니크 제약(V1__create_users_table.sql,
+ * uk_users_email)이다. 해당 제약은 Flyway 마이그레이션으로 관리되며, 운영/테스트
+ * 환경 모두 동일한 마이그레이션 스크립트를 통해 스키마가 구성되므로(ddl-auto=validate로
+ * Hibernate가 스키마를 임의 생성/변경하지 않음을 보장), 이 테스트에서 확인하는
+ * "유니크 제약 위반 → DataIntegrityViolationException → DuplicateEmailException 변환"
+ * 경로는 운영 환경에서도 동일하게 유효하다.
  *
  * 병렬 실행이 실제로 보장되도록 HikariCP 커넥션 풀의 최대 크기를
  * THREAD_COUNT 이상으로 명시적으로 설정한다(spring.datasource.hikari.maximum-pool-size).
  * 이를 통해 스레드가 커넥션 획득 대기로 순차화되어 경쟁 조건이 은폐되는 것을 방지한다.
  *
- * 환경 제약(Testcontainers 미사용)으로 인해 테스트 프로파일의 실제 관계형 DB(H2, PostgreSQL 호환 모드)에
- * 대해 진짜 스레드 병렬 요청을 수행하여 유니크 제약 위반 시 DuplicateEmailException으로
- * 정확히 변환되는지, 그리고 최종 저장된 레코드가 정확히 1건인지를 검증한다.
- * H2와 PostgreSQL의 트랜잭션 격리 수준 구현 세부 사항에는 차이가 있을 수 있으나,
- * 본 테스트가 검증하는 핵심 경로(유니크 제약 위반 → DataIntegrityViolationException →
- * DuplicateEmailException 변환)는 DB 종류에 의존하지 않는 애플리케이션 레벨 로직이므로
- * 운영 환경(PostgreSQL)에서도 동일하게 동작함이 보장된다. 완전한 운영 동등성 검증을
- * 위해서는 Testcontainers 기반 PostgreSQL 테스트로의 전환을 후속 과제로 남긴다.
+ * 제약사항: 테스트 DB는 H2(PostgreSQL 호환 모드)이며, 유니크 제약의 존재와 위반 시
+ * 예외 변환 경로는 DB 종류에 무관하게 동일하게 동작하지만, 트랜잭션 격리 수준의
+ * 세부 구현(예: 잠금 대기 시간, MVCC 스냅숏 처리)은 PostgreSQL과 완전히 동일하지
+ * 않을 수 있다. 완전한 운영 동등성 검증을 위해서는 Testcontainers 기반 PostgreSQL
+ * 테스트로의 전환을 후속 과제로 남긴다.
  */
 @SpringBootTest
 @TestPropertySource(properties = {
