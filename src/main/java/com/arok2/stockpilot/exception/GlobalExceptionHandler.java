@@ -1,6 +1,7 @@
 package com.arok2.stockpilot.exception;
 
 import com.arok2.stockpilot.dto.error.ErrorResponse;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,12 +55,34 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
         log.warn("Malformed request body: {}", ex.getMessage());
 
+        List<ErrorResponse.FieldError> details = extractFieldDetails(ex);
+
         ErrorResponse body = ErrorResponse.of(
                 "VALIDATION_ERROR",
-                "요청 본문 형식이 올바르지 않습니다"
+                "요청 본문 형식이 올바르지 않습니다",
+                details.isEmpty() ? null : details
         );
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    /**
+     * Enum 필드(riskProfile, investmentPeriod 등)에 정의되지 않은 값이 들어오면
+     * Jackson이 InvalidFormatException을 던지며 이는 HttpMessageNotReadableException으로
+     * 래핑되어 전달된다. 이 경우 어떤 필드가 잘못되었는지 클라이언트가 식별할 수 있도록
+     * 필드 경로를 details에 채운다.
+     */
+    private List<ErrorResponse.FieldError> extractFieldDetails(HttpMessageNotReadableException ex) {
+        Throwable cause = ex.getCause();
+        if (cause instanceof InvalidFormatException invalidFormatException
+                && !invalidFormatException.getPath().isEmpty()) {
+            String fieldName = invalidFormatException.getPath()
+                    .get(invalidFormatException.getPath().size() - 1)
+                    .getFieldName();
+            String reason = "허용되지 않는 값입니다: " + invalidFormatException.getValue();
+            return List.of(new ErrorResponse.FieldError(fieldName, reason));
+        }
+        return List.of();
     }
 
     @ExceptionHandler(DuplicateEmailException.class)

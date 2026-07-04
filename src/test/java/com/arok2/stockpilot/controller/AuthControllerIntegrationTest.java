@@ -102,7 +102,7 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    void 위험성향이_허용값이_아니면_400을_응답한다() throws Exception {
+    void 위험성향이_허용값이_아니면_400과_상세필드정보를_응답한다() throws Exception {
         String invalidRiskProfileJson = """
                 {
                   "email": "invalid-risk@example.com",
@@ -117,11 +117,12 @@ class AuthControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invalidRiskProfileJson))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code", is("VALIDATION_ERROR")));
+                .andExpect(jsonPath("$.code", is("VALIDATION_ERROR")))
+                .andExpect(jsonPath("$.details[?(@.field == 'riskProfile')]").exists());
     }
 
     @Test
-    void 투자기간이_허용값이_아니면_400을_응답한다() throws Exception {
+    void 투자기간이_허용값이_아니면_400과_상세필드정보를_응답한다() throws Exception {
         String invalidPeriodJson = """
                 {
                   "email": "invalid-period@example.com",
@@ -136,7 +137,8 @@ class AuthControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invalidPeriodJson))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code", is("VALIDATION_ERROR")));
+                .andExpect(jsonPath("$.code", is("VALIDATION_ERROR")))
+                .andExpect(jsonPath("$.details[?(@.field == 'investmentPeriod')]").exists());
     }
 
     @Test
