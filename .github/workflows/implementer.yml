@@ -82,9 +82,17 @@ jobs:
               with open('/tmp/generated_files.txt', 'w') as f:
                   for path, content in files:
                       path = path.strip()
+                      c = content.strip()
+                      cl = c.split('\n')
+                      # 모델이 붙인 ```lang / ``` 코드펜스 제거 (컴파일 불가 방지)
+                      if cl and cl[0].lstrip().startswith('```'):
+                          cl = cl[1:]
+                      if cl and cl[-1].strip() == '```':
+                          cl = cl[:-1]
+                      c = '\n'.join(cl).strip()
                       os.makedirs(os.path.dirname(path), exist_ok=True)
                       with open(path, 'w') as fout:
-                          fout.write(content.strip() + '\n')
+                          fout.write(c + '\n')
                       f.write(path + '\n')
                       print(f'Written: {path}')
           PYEOF
@@ -104,7 +112,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/ docs/tasks/ generated/ 2>/dev/null || true
+          # 존재하지 않는 경로가 있어도 add가 중단되지 않도록 -A 사용
+          git add -A
           git diff --staged --quiet || \
             git commit -m "feat: implement TASK-${{ env.TASK_ID }} by Implementer [skip ci]"
           git push origin ${{ env.BRANCH }}
@@ -159,3 +168,10 @@ jobs:
               '{prId: $prId, taskId: $taskId, implId: $implId, reviewId: $reviewId, title: $title, body: $body, prUrl: $prUrl, status: $status}')" && \
           echo "PullRequest registered to server" || \
           echo "WARN: Failed to register pull request to server (non-blocking)"
+
+      - name: Request Review (이슈에 review 라벨 → Reviewer 트리거)
+        if: env.PR_NUMBER != ''
+        env:
+          GH_TOKEN: ${{ secrets.PIPELINE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit ${{ github.event.issue.number }} --add-label "review"

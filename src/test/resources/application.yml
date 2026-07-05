@@ -1,11 +1,11 @@
-# Test profile: in-memory H2 so contextLoads runs without live infra.
-# Integration tests that need real Postgres/Kafka should use Testcontainers explicitly.
+# 테스트 프로파일: H2 인메모리 + Hibernate가 엔티티로 스키마 생성(create-drop).
+# users.email 유니크 제약은 User 엔티티의 @UniqueConstraint로 생성되어 동시성 테스트의 근거가 된다.
 spring:
   datasource:
-    url: jdbc:h2:mem:stockpilot;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    url: jdbc:h2:mem:stockpilot;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
     username: sa
     password:
-    driver-class-name: org.h2.Driver
 
   jpa:
     hibernate:
@@ -13,6 +13,7 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
+    open-in-view: false
 
   data:
     redis:

@@ -32,7 +32,6 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
-# Application-specific settings (JWT etc.)
 stockpilot:
   jwt:
     secret: ${JWT_SECRET:change-me-in-prod-this-is-a-32byte-minimum-dev-secret}
