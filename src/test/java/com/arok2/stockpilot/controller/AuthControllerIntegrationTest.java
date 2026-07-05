@@ -28,8 +28,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * 회원가입 API의 End-to-End 시나리오(성공/검증 실패/중복 이메일)를 실제 Spring 컨텍스트와
  * MockMvc를 통해 검증한다. 테스트 프로파일의 인메모리(H2, PostgreSQL 호환 모드) DB에
- * Flyway 마이그레이션(V1__create_users_table.sql)이 실제로 적용되어 유니크 제약 및
- * 스키마가 운영 환경과 동일하게 구성됨을 전제로 한다.
+ * User 엔티티의 스키마(@UniqueConstraint 포함)가 Hibernate ddl-auto(create-drop)로
+ * 구성됨을 전제로 한다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

@@ -29,10 +29,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 생성되는지 실제 Spring 컨텍스트를 통해 검증한다.
  *
  * 본 테스트가 검증하는 정합성 보장의 실제 근거는 애플리케이션 코드(사전 검사 +
- * 예외 변환)가 아니라 users.email 컬럼에 걸린 DB 유니크 제약(V1__create_users_table.sql,
- * uk_users_email)이다. 해당 제약은 Flyway 마이그레이션으로 관리되며, 운영/테스트
- * 환경 모두 동일한 마이그레이션 스크립트를 통해 스키마가 구성되므로(ddl-auto=validate로
- * Hibernate가 스키마를 임의 생성/변경하지 않음을 보장), 이 테스트에서 확인하는
+ * 예외 변환)가 아니라 users.email 컬럼에 걸린 DB 유니크 제약(User 엔티티의
+ * @UniqueConstraint uk_users_email)이다. 테스트에서는 Hibernate ddl-auto(create-drop)가
+ * 이 제약을 포함해 스키마를 생성하며, 운영 환경(PostgreSQL) 역시 동일한 엔티티 매핑으로
+ * 같은 유니크 제약이 적용되므로, 이 테스트에서 확인하는
  * "유니크 제약 위반 → DataIntegrityViolationException → DuplicateEmailException 변환"
  * 경로는 운영 환경에서도 동일하게 유효하다.
  *
