@@ -3,10 +3,14 @@ package com.arok2.stockpilot.service;
 import com.arok2.stockpilot.domain.InvestmentPeriod;
 import com.arok2.stockpilot.domain.RiskProfile;
 import com.arok2.stockpilot.domain.User;
+import com.arok2.stockpilot.dto.request.LoginRequest;
 import com.arok2.stockpilot.dto.request.SignupRequest;
+import com.arok2.stockpilot.dto.response.LoginResponse;
 import com.arok2.stockpilot.dto.response.SignupResponse;
 import com.arok2.stockpilot.exception.DuplicateEmailException;
+import com.arok2.stockpilot.exception.InvalidCredentialsException;
 import com.arok2.stockpilot.repository.UserRepository;
+import com.arok2.stockpilot.security.JwtTokenProvider;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,10 +22,12 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.lang.reflect.Field;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -36,11 +42,14 @@ class AuthServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private JwtTokenProvider jwtTokenProvider;
+
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, passwordEncoder);
+        authService = new AuthService(userRepository, passwordEncoder, jwtTokenProvider);
     }
 
     private SignupRequest validRequest() {
@@ -128,5 +137,50 @@ class AuthServiceTest {
         // when & then
         assertThatThrownBy(() -> authService.signup(request))
                 .isInstanceOf(DuplicateEmailException.class);
+    }
+
+    @Test
+    void 로그인_성공_시_액세스_토큰을_반환한다() throws Exception {
+        // given
+        LoginRequest request = new LoginRequest("user@example.com", "password123");
+        User user = userWithId(validRequest(), "hashed-password", 7L);
+        given(userRepository.findByEmail(request.email())).willReturn(Optional.of(user));
+        given(passwordEncoder.matches("password123", "hashed-password")).willReturn(true);
+        given(jwtTokenProvider.createAccessToken(7L, "user@example.com")).willReturn("jwt-token");
+        given(jwtTokenProvider.getValiditySeconds()).willReturn(3600L);
+
+        // when
+        LoginResponse response = authService.login(request);
+
+        // then
+        assertThat(response.accessToken()).isEqualTo("jwt-token");
+        assertThat(response.tokenType()).isEqualTo("Bearer");
+        assertThat(response.expiresIn()).isEqualTo(3600L);
+    }
+
+    @Test
+    void 존재하지_않는_이메일로_로그인하면_인증_예외가_발생한다() {
+        // given
+        LoginRequest request = new LoginRequest("nobody@example.com", "password123");
+        given(userRepository.findByEmail(request.email())).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> authService.login(request))
+                .isInstanceOf(InvalidCredentialsException.class);
+        verify(jwtTokenProvider, never()).createAccessToken(anyLong(), anyString());
+    }
+
+    @Test
+    void 비밀번호가_일치하지_않으면_인증_예외가_발생한다() throws Exception {
+        // given
+        LoginRequest request = new LoginRequest("user@example.com", "wrong-password");
+        User user = userWithId(validRequest(), "hashed-password", 7L);
+        given(userRepository.findByEmail(request.email())).willReturn(Optional.of(user));
+        given(passwordEncoder.matches("wrong-password", "hashed-password")).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> authService.login(request))
+                .isInstanceOf(InvalidCredentialsException.class);
+        verify(jwtTokenProvider, never()).createAccessToken(anyLong(), anyString());
     }
 }

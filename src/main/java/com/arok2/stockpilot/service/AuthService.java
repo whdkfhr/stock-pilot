@@ -1,10 +1,14 @@
 package com.arok2.stockpilot.service;
 
 import com.arok2.stockpilot.domain.User;
+import com.arok2.stockpilot.dto.request.LoginRequest;
 import com.arok2.stockpilot.dto.request.SignupRequest;
+import com.arok2.stockpilot.dto.response.LoginResponse;
 import com.arok2.stockpilot.dto.response.SignupResponse;
 import com.arok2.stockpilot.exception.DuplicateEmailException;
+import com.arok2.stockpilot.exception.InvalidCredentialsException;
 import com.arok2.stockpilot.repository.UserRepository;
+import com.arok2.stockpilot.security.JwtTokenProvider;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,10 +20,14 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtTokenProvider jwtTokenProvider;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public AuthService(UserRepository userRepository,
+                       PasswordEncoder passwordEncoder,
+                       JwtTokenProvider jwtTokenProvider) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jwtTokenProvider = jwtTokenProvider;
     }
 
     @Transactional
@@ -45,5 +53,16 @@ public class AuthService {
             // 동시 요청으로 인한 유니크 제약 위반을 최종 방어선으로 처리
             throw new DuplicateEmailException(request.email());
         }
+    }
+
+    @Transactional(readOnly = true)
+    public LoginResponse login(LoginRequest request) {
+        User user = userRepository.findByEmail(request.email())
+                .orElseThrow(InvalidCredentialsException::new);
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            throw new InvalidCredentialsException();
+        }
+        String token = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail());
+        return LoginResponse.of(token, jwtTokenProvider.getValiditySeconds());
     }
 }
