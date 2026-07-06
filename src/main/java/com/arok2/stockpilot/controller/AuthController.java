@@ -1,6 +1,8 @@
 package com.arok2.stockpilot.controller;
 
+import com.arok2.stockpilot.dto.request.LoginRequest;
 import com.arok2.stockpilot.dto.request.SignupRequest;
+import com.arok2.stockpilot.dto.response.LoginResponse;
 import com.arok2.stockpilot.dto.response.SignupResponse;
 import com.arok2.stockpilot.service.AuthService;
 
@@ -27,5 +29,10 @@ public class AuthController {
     public ResponseEntity<SignupResponse> signup(@Valid @RequestBody SignupRequest request) {
         SignupResponse response = authService.signup(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+        return ResponseEntity.ok(authService.login(request));
     }
 }
