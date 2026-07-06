@@ -1,18 +1,30 @@
 package com.arok2.stockpilot.config;
 
+import com.arok2.stockpilot.security.JwtAuthenticationFilter;
+
+import jakarta.servlet.http.HttpServletResponse;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * 인증/인가 기본 설정.
- * 회원가입·로그인 등 공개 엔드포인트와 actuator는 인증 없이 허용하고,
- * 그 외 요청은 인증을 요구한다. JWT 기반 무상태(stateless) API이므로 CSRF는 비활성화한다.
+ * 인증/인가 설정.
+ * 회원가입·로그인 등 공개 엔드포인트와 actuator는 인증 없이 허용하고, 그 외 요청은
+ * JWT 인증을 요구한다. JWT 기반 무상태(stateless) API이므로 세션·CSRF는 사용하지 않는다.
+ * 인증 실패 시 401(Unauthorized)을 반환한다.
  */
 @Configuration
 public class SecurityConfig {
+
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -22,7 +34,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
-                        .anyRequest().authenticated());
+                        .anyRequest().authenticated())
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(
+                        (request, response, authException) ->
+                                response.sendError(HttpServletResponse.SC_UNAUTHORIZED)))
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 }
