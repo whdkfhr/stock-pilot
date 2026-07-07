@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -103,8 +104,32 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
     }
 
+    @ExceptionHandler(StockNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleStockNotFound(StockNotFoundException ex) {
+        ErrorResponse body = ErrorResponse.of("STOCK_NOT_FOUND", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
+    @ExceptionHandler(WatchlistNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleWatchlistNotFound(WatchlistNotFoundException ex) {
+        ErrorResponse body = ErrorResponse.of("WATCHLIST_NOT_FOUND", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
+    @ExceptionHandler(WatchlistAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleWatchlistAlreadyExists(WatchlistAlreadyExistsException ex) {
+        ErrorResponse body = ErrorResponse.of("WATCHLIST_ALREADY_EXISTS", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthentication(AuthenticationException ex) {
+        ErrorResponse body = ErrorResponse.of("UNAUTHORIZED", "인증이 필요합니다");
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+    }
+
     /**
-     * AuthService에서 유니크 제약 위반을 DuplicateEmailException으로 변환하므로
+     * AuthService/WatchlistService에서 유니크 제약 위반을 각각의 전용 예외로 변환하므로
      * 정상 흐름에서는 이 핸들러까지 도달하지 않는다.
      * 다만 다른 경로(예: 향후 추가되는 배치/마이그레이션 로직 등)에서 발생하는
      * 무결성 위반이 500으로 노출되는 것을 방지하기 위한 방어적 처리이다.
@@ -112,7 +137,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
         log.warn("Unhandled data integrity violation: {}", ex.getMessage());
-        ErrorResponse body = ErrorResponse.of("DUPLICATE_EMAIL", "이미 사용 중인 값입니다");
+        ErrorResponse body = ErrorResponse.of("DUPLICATE_ENTRY", "이미 사용 중인 값입니다");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 

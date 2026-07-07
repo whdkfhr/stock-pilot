@@ -1,0 +1,29 @@
+package com.arok2.stockpilot.repository;
+
+import com.arok2.stockpilot.domain.Watchlist;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+
+@Repository
+public interface WatchlistRepository extends JpaRepository<Watchlist, Long> {
+
+    boolean existsByUserIdAndStockId(Long userId, Long stockId);
+
+    Optional<Watchlist> findByUserIdAndStockId(Long userId, Long stockId);
+
+    @Modifying
+    @Query("DELETE FROM Watchlist w WHERE w.userId = :userId AND w.stockId = :stockId")
+    int deleteByUserIdAndStockId(@Param("userId") Long userId, @Param("stockId") Long stockId);
+
+    // Watchlist.stockId는 연관관계가 아닌 스칼라 FK 컬럼이므로 JOIN FETCH 대상이 될 수 없다.
+    // N+1 회피는 Service 계층에서 stockId 목록을 모아 StockRepository.findAllById(...)로
+    // 배치 조회하는 방식으로 처리한다.
+    Page<Watchlist> findByUserId(Long userId, Pageable pageable);
+}
