@@ -23,4 +23,7 @@ public interface WatchlistRepository extends JpaRepository<Watchlist, Long> {
     int deleteByUserIdAndStockId(@Param("userId") Long userId, @Param("stockId") Long stockId);
 
     Page<Watchlist> findByUserId(Long userId, Pageable pageable);
+
+    @Query("SELECT w FROM Watchlist w JOIN FETCH w.stockId WHERE w.userId = :userId")
+    Page<Watchlist> findByUserIdWithStock(@Param("userId") Long userId, Pageable pageable);
 }
