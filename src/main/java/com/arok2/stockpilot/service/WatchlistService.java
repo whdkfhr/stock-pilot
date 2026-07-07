@@ -19,6 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class WatchlistService {
@@ -72,8 +75,18 @@ public class WatchlistService {
     public WatchlistPageResponse getMyWatchlist(Long userId, Pageable pageable) {
         Page<Watchlist> watchlistPage = watchlistRepository.findByUserId(userId, pageable);
 
+        List<Long> stockIds = watchlistPage.getContent().stream()
+                .map(Watchlist::getStockId)
+                .distinct()
+                .toList();
+
+        // Watchlist.stockId는 연관관계가 아니므로 JOIN FETCH를 사용할 수 없다.
+        // 대신 stockId 목록을 모아 단일 IN 쿼리로 배치 조회하여 N+1을 회피한다.
+        Map<Long, Stock> stockById = stockRepository.findAllById(stockIds).stream()
+                .collect(Collectors.toMap(Stock::getId, Function.identity()));
+
         List<WatchlistItemResponse> content = watchlistPage.getContent().stream()
-                .map(this::toItemResponse)
+                .map(w -> toItemResponse(w, stockById.get(w.getStockId())))
                 .toList();
 
         return new WatchlistPageResponse(
@@ -84,9 +97,10 @@ public class WatchlistService {
         );
     }
 
-    private WatchlistItemResponse toItemResponse(Watchlist watchlist) {
-        Stock stock = stockRepository.findById(watchlist.getStockId())
-                .orElseThrow(() -> new StockNotFoundException(watchlist.getStockId()));
+    private WatchlistItemResponse toItemResponse(Watchlist watchlist, Stock stock) {
+        if (stock == null) {
+            throw new StockNotFoundException(watchlist.getStockId());
+        }
 
         return new WatchlistItemResponse(
                 watchlist.getId(),
