@@ -12,12 +12,11 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
  * 추출하기 위한 메타 애노테이션. Path/Body를 통한 userId 조작을 허용하지 않기 위해
  * Controller 파라미터에서 이 애노테이션만을 통해 userId를 주입받는다.
  *
- * 실제 인증 주체(Principal) 구현체가 프로젝트 내 어디에 있는지에 따라
- * expression을 조정할 수 있도록 여지를 둔다. 기존 인증 체계에서 Principal이
- * userId(Long)를 직접 반환하는 커스텀 UserDetails/Principal 구현을 사용한다고 가정한다.
+ * 본 프로젝트의 JwtAuthenticationFilter는 principal로 사용자 식별자(Long)를
+ * 직접 설정하므로, @AuthenticationPrincipal 로 그 값을 그대로 주입받는다.
  */
 @Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)
-@AuthenticationPrincipal(expression = "userId")
+@AuthenticationPrincipal
 public @interface AuthenticatedUser {
 }

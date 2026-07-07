@@ -1,37 +1,35 @@
 package com.arok2.stockpilot.controller;
 
 import com.arok2.stockpilot.domain.Stock;
-import com.arok2.stockpilot.domain.Watchlist;
 import com.arok2.stockpilot.repository.StockRepository;
 import com.arok2.stockpilot.repository.WatchlistRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.arok2.stockpilot.security.JwtTokenProvider;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
 
 import static org.hamcrest.Matchers.is;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * WatchlistController에 대한 End-to-End 통합 테스트.
- * 실제 Spring 컨텍스트(SecurityFilterChain 포함)와 실제 DB(테스트 프로파일 데이터소스)를
- * 통해 등록/해제/조회 및 인증 실패 시나리오를 검증한다.
- *
- * 인증 주체(userId) 주입은 프로젝트 기존 인증 체계의 테스트 지원 방식(@WithMockUser 커스터마이징
- * 또는 동등한 테스트 시큐리티 설정)을 통해 이루어진다고 가정한다. userId=7 사용자로 인증된 상태를
- * 가정하는 커스텀 애노테이션/설정이 기존에 없다면, 아래 @WithUserId 를 프로젝트의 실제 테스트
- * 인증 지원 메커니즘으로 교체해야 한다.
+ * WatchlistController E2E 통합 테스트.
+ * 인증은 본 프로젝트의 실제 방식(JWT Bearer 토큰)으로 수행한다 — JwtTokenProvider로
+ * 특정 userId의 토큰을 발급해 Authorization 헤더로 전달하면, JwtAuthenticationFilter가
+ * principal(Long userId)을 설정하고 컨트롤러의 @AuthenticatedUser 로 주입된다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@ActiveProfiles("test")
 class WatchlistControllerIntegrationTest {
 
     @Autowired
@@ -44,16 +42,25 @@ class WatchlistControllerIntegrationTest {
     private WatchlistRepository watchlistRepository;
 
     @Autowired
-    private ObjectMapper objectMapper;
+    private JwtTokenProvider jwtTokenProvider;
 
     private Long stockId;
+
+    private String bearer(long userId) {
+        return "Bearer " + jwtTokenProvider.createAccessToken(userId, "user" + userId + "@example.com");
+    }
 
     @BeforeEach
     void setUp() {
         watchlistRepository.deleteAll();
         stockRepository.deleteAll();
-        Stock stock = stockRepository.save(new Stock("005930", "삼성전자"));
-        stockId = stock.getId();
+        stockId = stockRepository.save(new Stock("005930", "삼성전자")).getId();
+    }
+
+    @AfterEach
+    void tearDown() {
+        watchlistRepository.deleteAll();
+        stockRepository.deleteAll();
     }
 
     @Test
@@ -75,45 +82,43 @@ class WatchlistControllerIntegrationTest {
     }
 
     @Test
-    @Transactional
-    @WithMockUser(username = "7")
     void register_thenUnwatch_endToEndFlow() throws Exception {
-        // 등록: 201 및 watch_count 1 증가 확인
-        mockMvc.perform(post("/api/stocks/{stockId}/watch", stockId))
+        // 등록: 201, watch_count 1 증가
+        mockMvc.perform(post("/api/stocks/{stockId}/watch", stockId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(7)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.stockId", is(stockId.intValue())));
-
-        Stock afterRegister = stockRepository.findById(stockId).orElseThrow();
-        org.junit.jupiter.api.Assertions.assertEquals(1L, afterRegister.getWatchCount());
+        assertEquals(1L, stockRepository.findById(stockId).orElseThrow().getWatchCount());
 
         // 중복 등록: 409
-        mockMvc.perform(post("/api/stocks/{stockId}/watch", stockId))
+        mockMvc.perform(post("/api/stocks/{stockId}/watch", stockId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(7)))
                 .andExpect(status().isConflict());
 
-        // 내 목록 조회: 본인이 등록한 종목만 반환
-        mockMvc.perform(get("/api/me/watchlist"))
+        // 내 목록 조회: 본인이 등록한 종목만
+        mockMvc.perform(get("/api/me/watchlist")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(7)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()", is(1)))
                 .andExpect(jsonPath("$.content[0].stockId", is(stockId.intValue())));
 
-        // 해제: 200 및 watch_count 1 감소 확인
-        mockMvc.perform(delete("/api/stocks/{stockId}/watch", stockId))
+        // 해제: 200, watch_count 1 감소
+        mockMvc.perform(delete("/api/stocks/{stockId}/watch", stockId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(7)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.stockId", is(stockId.intValue())));
+        assertEquals(0L, stockRepository.findById(stockId).orElseThrow().getWatchCount());
 
-        Stock afterUnwatch = stockRepository.findById(stockId).orElseThrow();
-        org.junit.jupiter.api.Assertions.assertEquals(0L, afterUnwatch.getWatchCount());
-
-        // 해제 후 재해제: 404
-        mockMvc.perform(delete("/api/stocks/{stockId}/watch", stockId))
+        // 재해제: 404
+        mockMvc.perform(delete("/api/stocks/{stockId}/watch", stockId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(7)))
                 .andExpect(status().isNotFound());
     }
 
     @Test
-    @Transactional
-    @WithMockUser(username = "999")
     void register_withNonExistentStock_returns404() throws Exception {
-        mockMvc.perform(post("/api/stocks/{stockId}/watch", 999999L))
+        mockMvc.perform(post("/api/stocks/{stockId}/watch", 999999L)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(999)))
                 .andExpect(status().isNotFound());
     }
 }
