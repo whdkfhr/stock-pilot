@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Resolve PR for this task
         env:
@@ -32,13 +34,50 @@ jobs:
           echo "TASK_ID=${TASK_ID}" >> $GITHUB_ENV
           echo "PR_NUMBER=${PR_NUMBER}" >> $GITHUB_ENV
 
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Build & test gate (실제 컴파일·테스트 실행)
+        run: |
+          git checkout "feature/task-${{ env.TASK_ID }}"
+          if ./gradlew --no-daemon compileTestJava test > /tmp/build_output.txt 2>&1; then
+            echo "BUILD_STATUS=0" >> $GITHUB_ENV
+            echo "빌드/테스트 통과"
+          else
+            echo "BUILD_STATUS=1" >> $GITHUB_ENV
+            echo "빌드/테스트 실패 → 자동 반려 예정"
+          fi
+          tail -c 6000 /tmp/build_output.txt > /tmp/build_tail.txt
+          # 리뷰어가 TASK/DESIGN/프롬프트를 읽도록 default(develop)로 복귀
+          git checkout develop
+
       - name: Get PR diff
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr diff ${{ env.PR_NUMBER }} | head -c 40000 > /tmp/pr_diff.txt
 
-      - name: Call Claude — Reviewer
+      - name: Reviewer — 빌드 실패 시 자동 반려 (Claude 생략)
+        if: env.BUILD_STATUS != '0'
+        run: |
+          {
+            echo "REJECTED"
+            echo ""
+            echo "## Summary"
+            echo "빌드/테스트 게이트 실패 — 컴파일 또는 테스트가 통과하지 못했습니다. 아래 출력을 근거로 Self-Healing이 우선 수정합니다."
+            echo ""
+            echo "## Build/Test Output (tail)"
+            echo '```'
+            cat /tmp/build_tail.txt
+            echo '```'
+          } > /tmp/review_result.txt
+
+      - name: Reviewer — 빌드 통과 시 Claude 리뷰
+        if: env.BUILD_STATUS == '0'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -54,7 +93,7 @@ jobs:
             --arg task "$TASK_CONTENT" \
             --arg design "$DESIGN_CONTENT" \
             --arg diff "$DIFF_CONTENT" \
-            '"## TASK\n" + $task + "\n\n## DESIGN\n" + $design + "\n\n## PR Diff\n" + $diff')
+            '"## TASK\n" + $task + "\n\n## DESIGN\n" + $design + "\n\n## 빌드/테스트\nCI에서 컴파일과 전체 테스트가 통과함(green). Test Coverage는 테스트 존재·유효성 관점에서 판단하라.\n\n## PR Diff\n" + $diff')
 
           curl -sf https://api.anthropic.com/v1/messages \
             -H "x-api-key: $ANTHROPIC_API_KEY" \
