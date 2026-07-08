@@ -36,6 +36,12 @@ stockpilot:
   jwt:
     secret: ${JWT_SECRET:change-me-in-prod-this-is-a-32byte-minimum-dev-secret}
     access-token-validity-seconds: ${JWT_ACCESS_TTL:3600}
+  kafka:
+    stock-price-topic: ${STOCK_PRICE_TOPIC:stock-price}
+  price:
+    collector:
+      enabled: ${PRICE_COLLECTOR_ENABLED:true}
+      interval-ms: ${PRICE_COLLECTOR_INTERVAL_MS:2000}
 
 management:
   endpoints:

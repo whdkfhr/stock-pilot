@@ -29,3 +29,6 @@ stockpilot:
   jwt:
     secret: test-secret-that-is-at-least-32-bytes-long-000
     access-token-validity-seconds: 3600
+  price:
+    collector:
+      enabled: false   # 테스트 중 스케줄러가 Kafka로 발행하지 않도록 비활성
