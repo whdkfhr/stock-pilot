@@ -41,11 +41,37 @@ jobs:
             exit 1
           fi
 
+          # 저장소 인식 컨텍스트: 기존 파일 목록 + 핵심 연동 파일 전체 내용
+          # (에이전트가 기존 코드를 못 보고 재작성/회귀하는 것을 방지)
+          {
+            echo "## 기존 코드베이스 컨텍스트 (신규 코드가 아래와 충돌·중복·회귀되지 않도록 반드시 참고)"
+            echo "### 현재 소스 파일 목록"
+            git ls-files 'src/main/java' 'src/main/resources' 2>/dev/null
+            echo ""
+            echo "### 확장 대상 핵심 연동 파일 (전체를 새로 쓰지 말고 기존 내용을 보존하며 확장하라)"
+            for f in \
+              src/main/java/com/arok2/stockpilot/StockPilotApplication.java \
+              src/main/java/com/arok2/stockpilot/config/SecurityConfig.java \
+              src/main/java/com/arok2/stockpilot/config/JwtProperties.java \
+              src/main/java/com/arok2/stockpilot/exception/GlobalExceptionHandler.java \
+              src/main/java/com/arok2/stockpilot/security/JwtAuthenticationFilter.java \
+              src/main/java/com/arok2/stockpilot/security/JwtTokenProvider.java \
+              src/main/java/com/arok2/stockpilot/support/AuthenticatedUser.java; do
+              if [ -f "$f" ]; then
+                echo "===== 기존파일: $f ====="
+                cat "$f"
+                echo "===== 끝: $f ====="
+                echo ""
+              fi
+            done
+          } > /tmp/codebase_context.txt
+
           SYSTEM=$(jq -Rs . < .claude/agents/implementer.md)
           USER_MSG=$(jq -n \
             --rawfile task "$TASK_FILE" \
             --rawfile design "$DESIGN_FILE" \
-            '"TASK:\n" + $task + "\n\nDESIGN:\n" + $design')
+            --rawfile context /tmp/codebase_context.txt \
+            '"TASK:\n" + $task + "\n\nDESIGN:\n" + $design + "\n\n" + $context')
 
           curl -sf https://api.anthropic.com/v1/messages \
             -H "x-api-key: $ANTHROPIC_API_KEY" \
