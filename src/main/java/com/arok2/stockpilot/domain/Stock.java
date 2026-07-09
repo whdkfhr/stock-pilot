@@ -32,6 +32,10 @@ public class Stock {
     @Column(name = "dividend_yield")
     private Double dividendYield;
 
+    // Redis 좋아요 카운트를 주기적으로 동기화한 값(정합성 스냅샷). null이면 0으로 취급.
+    @Column(name = "like_count")
+    private Long likeCount;
+
     protected Stock() {
     }
 
@@ -84,5 +88,13 @@ public class Stock {
 
     public double getDividendYield() {
         return dividendYield == null ? 0.0 : dividendYield;
+    }
+
+    public long getLikeCount() {
+        return likeCount == null ? 0L : likeCount;
+    }
+
+    public void updateLikeCount(long likeCount) {
+        this.likeCount = likeCount;
     }
 }
