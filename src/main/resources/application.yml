@@ -42,6 +42,10 @@ stockpilot:
     collector:
       enabled: ${PRICE_COLLECTOR_ENABLED:true}
       interval-ms: ${PRICE_COLLECTOR_INTERVAL_MS:2000}
+  like:
+    sync:
+      enabled: ${LIKE_SYNC_ENABLED:true}
+      interval-ms: ${LIKE_SYNC_INTERVAL_MS:10000}
 
 management:
   endpoints:
