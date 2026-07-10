@@ -7,8 +7,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 @Repository
 public interface StockRepository extends JpaRepository<Stock, Long> {
+
+    Optional<Stock> findByCode(String code);
 
     @Modifying
     @Query("UPDATE Stock s SET s.watchCount = s.watchCount + 1 WHERE s.id = :stockId")
