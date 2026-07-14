@@ -15,6 +15,87 @@ Spring Boot로 구현하는 것을 목표로 한다.
 Java 17 · Spring Boot 3.5 · Spring Security + JWT · JPA + QueryDSL · PostgreSQL ·
 Redis · Kafka · Actuator/Micrometer/Prometheus/Grafana · Testcontainers · Docker Compose
 
+## 핵심 기능 & 릴리스
+
+각 기능은 코드 + 테스트 + 실 인프라 라이브 데모로 검증하고 태그로 릴리스했다.
+
+| 릴리스 | 기능 | 실증하는 것 |
+|--------|------|-------------|
+| v0.1.0 | 회원가입 | BCrypt, 유니크 제약 동시성 방어, 글로벌 예외 처리 |
+| v0.2.0 | 로그인 / JWT | 무상태 인증, JWT 필터, 보호 자원 |
+| v0.3.0 | 관심종목 등록/해제 | **동시성**: watch_count DB 원자적 UPDATE(갱신 손실 0) |
+| v0.4.0 | Kafka 실시간 시세 수집 | 수집·저장 분리, 다중 Consumer 분산 소비 |
+| v0.5.0 | 성향 기반 추천 | 가중치 스코어링 + **Cache-Aside**(Redis TTL) |
+| v0.6.0 | 인기 랭킹 · 좋아요 | Redis **Sorted Set**(ZINCRBY/ZREVRANGE) · **Set**(SADD 멱등) |
+| v0.7.0 | 이벤트 드리븐 알림 | 시세 이벤트 → 조건 평가, 원자적 발화(중복 방지) |
+| v0.8.0 | 관측성 / 성능 | Micrometer 커스텀 메트릭 + Grafana 대시보드 |
+| v0.9.0 | Yahoo 실 시세 연동 | `PriceSource` 교체만으로 목→실 데이터 전환 |
+
+> 다음 단계: 한국투자증권(KIS) 실시간(WebSocket) 시세 승격.
+
+## 아키텍처 개요
+
+```
+                                        ┌─▶ [price-cache]     ─▶ Redis (최신가)
+ 시세 소스        Collector    Kafka     │
+ (PriceSource) ─▶ (스케줄러) ─▶ stock-price ┼─▶ [price-analytics] ─▶ PostgreSQL (시세 이력)
+  random|yahoo|KIS              (파티션키=종목)│
+                                        └─▶ [notification]    ─▶ 조건 평가 ─▶ 알림 생성
+       (하나의 이벤트, 3개 독립 Consumer group)
+
+ 사용자 ─▶ REST API ─▶ Service ─┬─ Redis      (추천 캐시 / 랭킹 ZSET / 좋아요 Set)
+   (JWT)                        └─ PostgreSQL (사용자·종목·관심종목·이력·알림 영속)
+```
+
+- **레이어드**: Controller → Service → Repository, 도메인 단위 패키지(`com.arok2.stockpilot.*`).
+- **이벤트 기반**: 실시간 시세는 Kafka로 비동기 수집·분산 소비.
+- **Cache-Aside**: 조회 성능이 중요한 데이터는 Redis 우선, DB 폴백.
+
+## 기술 실증 — "왜 이 기술을 썼나"
+
+| 주제 | 문제 | 해법 (코드) |
+|------|------|-------------|
+| **Kafka** | 초당 유입되는 시세를 API가 직접 DB에 넣으면 병목 | 수집→Kafka→Consumer로 분리, 한 토픽을 3개 group(캐시/이력/알림)이 독립 소비 |
+| **Redis ZSET** | 인기 랭킹을 `ORDER BY count DESC`로 매번 조회하면 느림 | Sorted Set `ZINCRBY`/`ZREVRANGE`로 O(logN) 랭킹 |
+| **Redis Set** | 다수 동시 좋아요 시 lost update·중복 | `SADD` 멱등(1인 1좋아요) + `SCARD` 정확 집계, 배치로 DB 동기화 |
+| **동시성 제어** | 다수 동시 관심등록 시 watch_count 갱신 손실 | DB 원자적 `UPDATE ... SET watch_count = watch_count + 1` |
+| **Cache-Aside** | 추천 계산 비용 | Redis 캐시 우선·미스 시 계산 후 캐싱(TTL), hit/miss 메트릭으로 적중률 관측 |
+| **이벤트 드리븐** | 시세 조건 알림 | 시세 이벤트 소비 → 조건 평가 → 원자적 `ACTIVE→TRIGGERED`로 1회만 발화 |
+| **관측성** | 아키텍처 효과를 수치로 증명 | Micrometer 커스텀 메트릭 → Prometheus → Grafana 대시보드 |
+
+## 주요 API
+
+인증이 필요한 엔드포인트는 `Authorization: Bearer <accessToken>` 헤더를 요구한다.
+
+| 도메인 | 메서드 · 경로 | 인증 |
+|--------|--------------|:---:|
+| 인증 | `POST /api/auth/signup` · `POST /api/auth/login` | 공개 |
+| 사용자 | `GET /api/users/me` | 🔒 |
+| 관심종목 | `POST`·`DELETE /api/stocks/{id}/watch` · `GET /api/me/watchlist` | 🔒 |
+| 시세 | `GET /api/stocks/{code}/price` · `GET /api/stocks/{code}/price/history` | 공개 |
+| 추천 | `GET /api/recommendations` | 🔒 |
+| 좋아요 | `POST /api/stocks/{code}/like` · `GET /api/stocks/{code}/likes` | 🔒 / 공개 |
+| 랭킹 | `POST /api/stocks/{code}/view` · `GET /api/rankings/popular` | 공개 |
+| 알림 조건 | `POST`·`GET /api/alerts` · `DELETE /api/alerts/{id}` | 🔒 |
+| 알림 | `GET /api/notifications` · `PATCH /api/notifications/{id}/read` | 🔒 |
+| 메트릭 | `GET /actuator/prometheus` | 공개 |
+
+## 실시간 시세 소스
+
+시세 공급은 `PriceSource` 인터페이스로 추상화되어 있어 **구현체 교체만으로** 목↔실 데이터를 전환한다.
+`stockpilot.price.source`(환경변수 `PRICE_SOURCE`)로 선택한다.
+
+| 값 | 소스 | 비고 |
+|----|------|------|
+| `random` (기본) | 랜덤워크 목 | 인프라만으로 데모, 외부 의존 없음 |
+| `yahoo` | Yahoo Finance | 국장 `.KS`/`.KQ`, 약 15분 지연, 키 불필요 |
+| `kis` *(예정)* | 한국투자증권 | 실시간 체결가(REST+WebSocket), 앱키/OAuth 필요 |
+
+```bash
+# 실 시세(야후)로 기동 — 종목코드는 자동으로 .KS(KOSPI) 심볼로 매핑
+PRICE_SOURCE=yahoo ./gradlew bootRun
+```
+
 ## 로컬 실행
 
 ```bash
@@ -34,7 +115,7 @@ docker compose up -d
 | Actuator / Prometheus 메트릭 | http://localhost:8080/actuator/prometheus |
 | Kafka UI | http://localhost:8081 |
 | Prometheus | http://localhost:9090 |
-| Grafana | http://localhost:3000 (admin / admin) |
+| Grafana | http://localhost:3000 (admin / admin) — "StockPilot 관측성" 대시보드 자동 프로비저닝 |
 
 ## AI 개발 파이프라인 (GitHub Actions)
 
