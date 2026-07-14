@@ -39,9 +39,15 @@ stockpilot:
   kafka:
     stock-price-topic: ${STOCK_PRICE_TOPIC:stock-price}
   price:
+    # 시세 소스 선택: random(데모용 랜덤워크, 기본) | yahoo(Yahoo Finance 실시간·약 15분 지연)
+    source: ${PRICE_SOURCE:random}
     collector:
       enabled: ${PRICE_COLLECTOR_ENABLED:true}
       interval-ms: ${PRICE_COLLECTOR_INTERVAL_MS:2000}
+    yahoo:
+      default-suffix: ${YAHOO_DEFAULT_SUFFIX:.KS}   # KOSPI=.KS, KOSDAQ=.KQ
+      # 예외 매핑(KOSDAQ 종목 등): symbols[086520]=086520.KQ
+      symbols: {}
   like:
     sync:
       enabled: ${LIKE_SYNC_ENABLED:true}
