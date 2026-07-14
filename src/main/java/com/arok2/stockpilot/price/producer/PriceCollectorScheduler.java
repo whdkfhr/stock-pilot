@@ -34,9 +34,18 @@ public class PriceCollectorScheduler {
     @Scheduled(fixedDelayString = "${stockpilot.price.collector.interval-ms:2000}")
     public void collect() {
         var stocks = stockRepository.findAll();
-        stocks.forEach(stock -> priceProducer.publish(priceSource.fetch(stock.getCode())));
-        if (!stocks.isEmpty()) {
-            log.debug("시세 {}종목 발행", stocks.size());
+        int published = 0;
+        for (var stock : stocks) {
+            try {
+                priceProducer.publish(priceSource.fetch(stock.getCode()));
+                published++;
+            } catch (Exception e) {
+                // 외부 시세 API(예: Yahoo)의 일시 오류가 한 종목 때문에 전체 수집을 막지 않도록 격리한다.
+                log.warn("시세 수집 실패 {}: {}", stock.getCode(), e.getMessage());
+            }
+        }
+        if (published > 0) {
+            log.debug("시세 {}종목 발행", published);
         }
     }
 }

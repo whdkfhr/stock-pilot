@@ -2,6 +2,7 @@ package com.arok2.stockpilot.price.source;
 
 import com.arok2.stockpilot.price.event.StockPriceEvent;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -11,9 +12,10 @@ import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 외부 API를 대체하는 데모용 시세 소스. 종목별 최근가를 기준으로 랜덤워크하여
- * 실시간 시세와 유사한 흐름을 생성한다.
+ * 실시간 시세와 유사한 흐름을 생성한다. {@code stockpilot.price.source}가 없거나 random일 때 활성화(기본값).
  */
 @Component
+@ConditionalOnProperty(name = "stockpilot.price.source", havingValue = "random", matchIfMissing = true)
 public class RandomWalkPriceSource implements PriceSource {
 
     private static final long DEFAULT_BASE = 50_000L;
