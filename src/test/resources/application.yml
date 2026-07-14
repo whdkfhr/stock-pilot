@@ -35,3 +35,13 @@ stockpilot:
   like:
     sync:
       enabled: false   # 테스트 중 좋아요 DB 동기화 스케줄러 비활성
+
+# 운영과 동일하게 관측성 엔드포인트를 노출해 메트릭 노출을 테스트에서도 검증한다.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics
+  metrics:
+    tags:
+      application: stock-pilot

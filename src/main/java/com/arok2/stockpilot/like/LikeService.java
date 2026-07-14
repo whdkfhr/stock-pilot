@@ -1,5 +1,9 @@
 package com.arok2.stockpilot.like;
 
+import com.arok2.stockpilot.observability.StockPilotMetrics;
+
+import io.micrometer.core.instrument.MeterRegistry;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -13,14 +17,17 @@ import org.springframework.stereotype.Service;
 public class LikeService {
 
     private final StringRedisTemplate redisTemplate;
+    private final MeterRegistry meterRegistry;
 
-    public LikeService(StringRedisTemplate redisTemplate) {
+    public LikeService(StringRedisTemplate redisTemplate, MeterRegistry meterRegistry) {
         this.redisTemplate = redisTemplate;
+        this.meterRegistry = meterRegistry;
     }
 
     /** 좋아요 등록 후 현재 좋아요 수 반환. */
     public long like(Long userId, String code) {
         redisTemplate.opsForSet().add(key(code), String.valueOf(userId));
+        meterRegistry.counter(StockPilotMetrics.LIKE_REGISTERED).increment();
         return count(code);
     }
 

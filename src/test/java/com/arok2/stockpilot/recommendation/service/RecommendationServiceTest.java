@@ -7,9 +7,12 @@ import com.arok2.stockpilot.domain.User;
 import com.arok2.stockpilot.recommendation.cache.RecommendationCache;
 import com.arok2.stockpilot.recommendation.dto.RecommendationItem;
 import com.arok2.stockpilot.recommendation.dto.RecommendationResponse;
+import com.arok2.stockpilot.observability.StockPilotMetrics;
 import com.arok2.stockpilot.recommendation.scoring.RecommendationScorer;
 import com.arok2.stockpilot.repository.StockRepository;
 import com.arok2.stockpilot.repository.UserRepository;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,12 +42,19 @@ class RecommendationServiceTest {
     @Mock
     private RecommendationCache recommendationCache;
 
+    private SimpleMeterRegistry meterRegistry;
     private RecommendationService service;
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
         service = new RecommendationService(
-                userRepository, stockRepository, new RecommendationScorer(), recommendationCache);
+                userRepository, stockRepository, new RecommendationScorer(), recommendationCache, meterRegistry);
+    }
+
+    private double cacheCount(String result) {
+        return meterRegistry.counter(StockPilotMetrics.RECOMMENDATION_CACHE,
+                StockPilotMetrics.TAG_RESULT, result).count();
     }
 
     @Test
@@ -62,6 +72,9 @@ class RecommendationServiceTest {
         // 배당형이므로 배당주가 1위
         assertThat(response.items().get(0).code()).isEqualTo("DIV");
         verify(recommendationCache).put(1L, response);
+        // 캐시 미스 메트릭 + 계산 타이머 기록 확인
+        assertThat(cacheCount(StockPilotMetrics.RESULT_MISS)).isEqualTo(1.0);
+        assertThat(meterRegistry.timer(StockPilotMetrics.RECOMMENDATION_COMPUTE).count()).isEqualTo(1L);
     }
 
     @Test
@@ -76,5 +89,8 @@ class RecommendationServiceTest {
         verifyNoInteractions(userRepository, stockRepository);
         verify(recommendationCache, never()).put(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.any());
+        // 캐시 히트 메트릭 확인, 계산 타이머는 기록되지 않음
+        assertThat(cacheCount(StockPilotMetrics.RESULT_HIT)).isEqualTo(1.0);
+        assertThat(meterRegistry.timer(StockPilotMetrics.RECOMMENDATION_COMPUTE).count()).isEqualTo(0L);
     }
 }

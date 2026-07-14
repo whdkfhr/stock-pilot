@@ -7,8 +7,11 @@ import com.arok2.stockpilot.notification.domain.AlertStatus;
 import com.arok2.stockpilot.notification.domain.Notification;
 import com.arok2.stockpilot.notification.repository.AlertConditionRepository;
 import com.arok2.stockpilot.notification.repository.NotificationRepository;
+import com.arok2.stockpilot.observability.StockPilotMetrics;
 import com.arok2.stockpilot.price.event.StockPriceEvent;
 import com.arok2.stockpilot.repository.StockRepository;
+
+import io.micrometer.core.instrument.MeterRegistry;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,13 +34,16 @@ public class AlertEvaluator {
     private final AlertConditionRepository alertConditionRepository;
     private final NotificationRepository notificationRepository;
     private final StockRepository stockRepository;
+    private final MeterRegistry meterRegistry;
 
     public AlertEvaluator(AlertConditionRepository alertConditionRepository,
                           NotificationRepository notificationRepository,
-                          StockRepository stockRepository) {
+                          StockRepository stockRepository,
+                          MeterRegistry meterRegistry) {
         this.alertConditionRepository = alertConditionRepository;
         this.notificationRepository = notificationRepository;
         this.stockRepository = stockRepository;
+        this.meterRegistry = meterRegistry;
     }
 
     @Transactional
@@ -62,6 +68,7 @@ public class AlertEvaluator {
                 String message = buildMessage(stockName, condition, event.price());
                 notificationRepository.save(
                         Notification.of(condition.getUserId(), event.code(), message, event.price()));
+                meterRegistry.counter(StockPilotMetrics.ALERT_TRIGGERED).increment();
                 log.debug("알림 발화 user={} {} price={}", condition.getUserId(), event.code(), event.price());
             }
         }

@@ -55,6 +55,11 @@ management:
   metrics:
     tags:
       application: stock-pilot
+    distribution:
+      # p95/p99 지연 관측을 위해 주요 타이머에 히스토그램 버킷을 발행한다.
+      percentiles-histogram:
+        http.server.requests: true
+        stockpilot.recommendation.compute: true
 
 server:
   port: ${SERVER_PORT:8080}

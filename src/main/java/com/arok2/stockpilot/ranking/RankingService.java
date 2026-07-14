@@ -1,8 +1,11 @@
 package com.arok2.stockpilot.ranking;
 
 import com.arok2.stockpilot.domain.Stock;
+import com.arok2.stockpilot.observability.StockPilotMetrics;
 import com.arok2.stockpilot.ranking.dto.RankingItem;
 import com.arok2.stockpilot.repository.StockRepository;
+
+import io.micrometer.core.instrument.MeterRegistry;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
@@ -25,15 +28,20 @@ public class RankingService {
 
     private final StringRedisTemplate redisTemplate;
     private final StockRepository stockRepository;
+    private final MeterRegistry meterRegistry;
 
-    public RankingService(StringRedisTemplate redisTemplate, StockRepository stockRepository) {
+    public RankingService(StringRedisTemplate redisTemplate,
+                          StockRepository stockRepository,
+                          MeterRegistry meterRegistry) {
         this.redisTemplate = redisTemplate;
         this.stockRepository = stockRepository;
+        this.meterRegistry = meterRegistry;
     }
 
     /** 조회 발생 시 해당 종목의 랭킹 점수를 1 증가시킨다(원자적). */
     public void recordView(String code) {
         redisTemplate.opsForZSet().incrementScore(KEY, code, 1);
+        meterRegistry.counter(StockPilotMetrics.RANKING_VIEW).increment();
     }
 
     /** 조회수 기준 상위 limit 종목. */
