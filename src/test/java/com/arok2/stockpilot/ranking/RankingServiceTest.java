@@ -12,6 +12,8 @@ import org.springframework.data.redis.core.DefaultTypedTuple;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -37,7 +39,7 @@ class RankingServiceTest {
     void 조회_발생시_ZINCRBY로_점수를_1_증가시킨다() {
         when(redisTemplate.opsForZSet()).thenReturn(zSetOperations);
 
-        RankingService rankingService = new RankingService(redisTemplate, stockRepository);
+        RankingService rankingService = new RankingService(redisTemplate, stockRepository, new SimpleMeterRegistry());
         rankingService.recordView("000660");
 
         verify(zSetOperations).incrementScore("rank:popular", "000660", 1);
@@ -54,7 +56,7 @@ class RankingServiceTest {
                 Stock.of("000660", "SK하이닉스", 13, 1.5, 22, 1.0),
                 Stock.of("005930", "삼성전자", 12, 1.4, 15, 2.0)));
 
-        RankingService rankingService = new RankingService(redisTemplate, stockRepository);
+        RankingService rankingService = new RankingService(redisTemplate, stockRepository, new SimpleMeterRegistry());
         List<RankingItem> items = rankingService.top(2);
 
         assertThat(items).hasSize(2);
@@ -69,7 +71,7 @@ class RankingServiceTest {
         when(redisTemplate.opsForZSet()).thenReturn(zSetOperations);
         when(zSetOperations.reverseRangeWithScores("rank:popular", 0, 9)).thenReturn(null);
 
-        RankingService rankingService = new RankingService(redisTemplate, stockRepository);
+        RankingService rankingService = new RankingService(redisTemplate, stockRepository, new SimpleMeterRegistry());
 
         assertThat(rankingService.top(10)).isEmpty();
     }
