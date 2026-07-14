@@ -10,6 +10,8 @@ import com.arok2.stockpilot.notification.repository.NotificationRepository;
 import com.arok2.stockpilot.price.event.StockPriceEvent;
 import com.arok2.stockpilot.repository.StockRepository;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -53,7 +55,7 @@ class AlertEvaluatorTest {
                 .thenReturn(Optional.of(Stock.of("005930", "삼성전자", 12, 1.4, 15, 2.0)));
         when(alertConditionRepository.markTriggered(any(), any(Instant.class))).thenReturn(1);
 
-        AlertEvaluator evaluator = new AlertEvaluator(alertConditionRepository, notificationRepository, stockRepository);
+        AlertEvaluator evaluator = new AlertEvaluator(alertConditionRepository, notificationRepository, stockRepository, new SimpleMeterRegistry());
         evaluator.evaluate(event(61_000));
 
         ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
@@ -71,7 +73,7 @@ class AlertEvaluatorTest {
         when(alertConditionRepository.findByStockCodeAndStatus("005930", AlertStatus.ACTIVE))
                 .thenReturn(List.of(condition));
 
-        AlertEvaluator evaluator = new AlertEvaluator(alertConditionRepository, notificationRepository, stockRepository);
+        AlertEvaluator evaluator = new AlertEvaluator(alertConditionRepository, notificationRepository, stockRepository, new SimpleMeterRegistry());
         evaluator.evaluate(event(59_000));
 
         verify(alertConditionRepository, never()).markTriggered(anyLong(), any());
@@ -86,7 +88,7 @@ class AlertEvaluatorTest {
         when(stockRepository.findByCode("005930")).thenReturn(Optional.empty());
         when(alertConditionRepository.markTriggered(any(), any(Instant.class))).thenReturn(0);
 
-        AlertEvaluator evaluator = new AlertEvaluator(alertConditionRepository, notificationRepository, stockRepository);
+        AlertEvaluator evaluator = new AlertEvaluator(alertConditionRepository, notificationRepository, stockRepository, new SimpleMeterRegistry());
         evaluator.evaluate(event(61_000));
 
         verify(notificationRepository, never()).save(any());
@@ -97,7 +99,7 @@ class AlertEvaluatorTest {
         when(alertConditionRepository.findByStockCodeAndStatus("005930", AlertStatus.ACTIVE))
                 .thenReturn(List.of());
 
-        AlertEvaluator evaluator = new AlertEvaluator(alertConditionRepository, notificationRepository, stockRepository);
+        AlertEvaluator evaluator = new AlertEvaluator(alertConditionRepository, notificationRepository, stockRepository, new SimpleMeterRegistry());
         evaluator.evaluate(event(61_000));
 
         verify(stockRepository, never()).findByCode(eq("005930"));

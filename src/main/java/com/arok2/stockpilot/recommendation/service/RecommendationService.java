@@ -6,9 +6,13 @@ import com.arok2.stockpilot.exception.UserNotFoundException;
 import com.arok2.stockpilot.recommendation.cache.RecommendationCache;
 import com.arok2.stockpilot.recommendation.dto.RecommendationItem;
 import com.arok2.stockpilot.recommendation.dto.RecommendationResponse;
+import com.arok2.stockpilot.observability.StockPilotMetrics;
 import com.arok2.stockpilot.recommendation.scoring.RecommendationScorer;
 import com.arok2.stockpilot.repository.StockRepository;
 import com.arok2.stockpilot.repository.UserRepository;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,27 +30,41 @@ public class RecommendationService {
     private final StockRepository stockRepository;
     private final RecommendationScorer scorer;
     private final RecommendationCache recommendationCache;
+    private final MeterRegistry meterRegistry;
 
     public RecommendationService(UserRepository userRepository,
                                  StockRepository stockRepository,
                                  RecommendationScorer scorer,
-                                 RecommendationCache recommendationCache) {
+                                 RecommendationCache recommendationCache,
+                                 MeterRegistry meterRegistry) {
         this.userRepository = userRepository;
         this.stockRepository = stockRepository;
         this.scorer = scorer;
         this.recommendationCache = recommendationCache;
+        this.meterRegistry = meterRegistry;
     }
 
     /**
      * 사용자 성향 기반 추천 상위 종목. Cache-Aside: Redis에 있으면 즉시 반환, 없으면 계산 후 캐싱.
+     * 캐시 적중/미스와 계산 소요 시간을 메트릭으로 관측한다.
      */
     @Transactional(readOnly = true)
     public RecommendationResponse recommend(Long userId) {
         RecommendationResponse cached = recommendationCache.get(userId);
         if (cached != null) {
+            meterRegistry.counter(StockPilotMetrics.RECOMMENDATION_CACHE,
+                    StockPilotMetrics.TAG_RESULT, StockPilotMetrics.RESULT_HIT).increment();
             return cached;
         }
+        meterRegistry.counter(StockPilotMetrics.RECOMMENDATION_CACHE,
+                StockPilotMetrics.TAG_RESULT, StockPilotMetrics.RESULT_MISS).increment();
 
+        return Timer.builder(StockPilotMetrics.RECOMMENDATION_COMPUTE)
+                .register(meterRegistry)
+                .record(() -> computeAndCache(userId));
+    }
+
+    private RecommendationResponse computeAndCache(Long userId) {
         User user = userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
         RiskProfile profile = user.getRiskProfile();
 

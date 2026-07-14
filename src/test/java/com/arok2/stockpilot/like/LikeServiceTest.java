@@ -7,6 +7,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
@@ -27,7 +29,7 @@ class LikeServiceTest {
         when(redisTemplate.opsForSet()).thenReturn(setOperations);
         when(setOperations.size("stock:likes:000660")).thenReturn(3L);
 
-        LikeService likeService = new LikeService(redisTemplate);
+        LikeService likeService = new LikeService(redisTemplate, new SimpleMeterRegistry());
         long count = likeService.like(42L, "000660");
 
         verify(setOperations).add("stock:likes:000660", "42");
@@ -39,7 +41,7 @@ class LikeServiceTest {
         when(redisTemplate.opsForSet()).thenReturn(setOperations);
         when(setOperations.size(anyString())).thenReturn(null);
 
-        LikeService likeService = new LikeService(redisTemplate);
+        LikeService likeService = new LikeService(redisTemplate, new SimpleMeterRegistry());
 
         assertThat(likeService.count("999999")).isZero();
     }
