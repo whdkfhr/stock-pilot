@@ -1,32 +1,60 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useLiveStocks } from '@/composables/useLiveStocks'
+import { stocksApi } from '@/api/stocks'
 import { INVESTMENT_PERIOD_LABEL, RISK_PROFILE_LABEL } from '@/types'
+import type { RankingItem, WatchlistItem } from '@/types'
+import type { Direction } from '@/utils/format'
+import { formatNumber } from '@/utils/format'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
-import BaseButton from '@/components/ui/BaseButton.vue'
+import SectionHeader from '@/components/ui/SectionHeader.vue'
+import StockRow from '@/components/stock/StockRow.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
+const { stocks, directions, loading } = useLiveStocks()
 
-const profileText = computed(() => {
-  if (!auth.me) return ''
-  return `${RISK_PROFILE_LABEL[auth.me.riskProfile]} · ${INVESTMENT_PERIOD_LABEL[auth.me.investmentPeriod]}`
+const ranking = ref<RankingItem[]>([])
+const watchlist = ref<WatchlistItem[]>([])
+
+const profileText = computed(() =>
+  auth.me
+    ? `${RISK_PROFILE_LABEL[auth.me.riskProfile]} · ${INVESTMENT_PERIOD_LABEL[auth.me.investmentPeriod]}`
+    : '',
+)
+
+const priceByCode = computed(() => {
+  const m = new Map<string, number | null>()
+  for (const s of stocks.value) m.set(s.code, s.price)
+  return m
+})
+function priceFor(code: string) {
+  return priceByCode.value.get(code) ?? null
+}
+function dirFor(code: string): Direction {
+  return directions.value[code] ?? 'flat'
+}
+
+onMounted(async () => {
+  try {
+    ranking.value = (await stocksApi.popularRanking(5)).data
+  } catch {
+    /* 랭킹 비어있을 수 있음 */
+  }
+  try {
+    watchlist.value = (await stocksApi.myWatchlist(0, 5)).data.content
+  } catch {
+    /* 미인증/빈 목록 */
+  }
 })
 
 function logout() {
   auth.logout()
   router.replace('/login')
 }
-
-// 다음 단계에서 채워질 기능들
-const upcoming = [
-  { icon: '🔥', title: '인기 랭킹', desc: '실시간 조회 TOP 종목' },
-  { icon: '⭐', title: '관심종목', desc: '담아둔 종목 모아보기' },
-  { icon: '🎯', title: '맞춤 추천', desc: '내 성향 기반 추천' },
-  { icon: '🔔', title: '가격 알림', desc: '조건 도달 시 알림' },
-]
 </script>
 
 <template>
@@ -37,24 +65,65 @@ const upcoming = [
   </AppHeader>
 
   <main class="home">
-    <BaseCard class="hero">
-      <p class="hero__hi">안녕하세요,</p>
-      <h1 class="hero__name">{{ auth.me?.nickname ?? '투자자' }} 님 👋</h1>
-      <div class="hero__profile">
-        <span class="hero__badge">{{ profileText }}</span>
-      </div>
+    <!-- 인사 -->
+    <BaseCard class="hero" :padded="true">
+      <p class="hero__hi">안녕하세요, {{ auth.me?.nickname ?? '투자자' }} 님 👋</p>
+      <span class="hero__badge">{{ profileText }}</span>
     </BaseCard>
 
-    <h2 class="section-title">곧 만나요</h2>
-    <div class="grid">
-      <BaseCard v-for="item in upcoming" :key="item.title" class="feature">
-        <span class="feature__icon">{{ item.icon }}</span>
-        <p class="feature__title">{{ item.title }}</p>
-        <p class="feature__desc">{{ item.desc }}</p>
+    <!-- 실시간 시세 -->
+    <section>
+      <SectionHeader title="실시간 시세" live />
+      <BaseCard :padded="false" class="list">
+        <div v-if="loading && stocks.length === 0" class="state">시세를 불러오는 중…</div>
+        <div v-else-if="stocks.length === 0" class="state">등록된 종목이 없어요</div>
+        <ul v-else>
+          <li v-for="s in stocks" :key="s.code" class="list__item">
+            <StockRow :name="s.name" :code="s.code" :price="s.price" :direction="dirFor(s.code)" />
+          </li>
+        </ul>
       </BaseCard>
-    </div>
+    </section>
 
-    <BaseButton variant="secondary" size="md" @click="auth.fetchMe()"> 내 정보 새로고침 </BaseButton>
+    <!-- 인기 랭킹 -->
+    <section>
+      <SectionHeader title="🔥 지금 인기" />
+      <BaseCard :padded="false" class="list">
+        <div v-if="ranking.length === 0" class="state">아직 조회 기록이 없어요</div>
+        <ul v-else>
+          <li v-for="item in ranking" :key="item.code" class="list__item">
+            <StockRow
+              :rank="item.rank"
+              :name="item.name"
+              :code="item.code"
+              :price="priceFor(item.code)"
+              :direction="dirFor(item.code)"
+              :meta="`조회 ${formatNumber(item.viewCount)}`"
+            />
+          </li>
+        </ul>
+      </BaseCard>
+    </section>
+
+    <!-- 관심종목 -->
+    <section>
+      <SectionHeader title="⭐ 관심종목" />
+      <BaseCard :padded="false" class="list">
+        <div v-if="watchlist.length === 0" class="state state--hint">
+          아직 담은 종목이 없어요<br /><small>종목 상세에서 관심종목을 추가할 수 있어요</small>
+        </div>
+        <ul v-else>
+          <li v-for="w in watchlist" :key="w.watchlistId" class="list__item">
+            <StockRow
+              :name="w.stockName"
+              :code="w.stockCode"
+              :price="priceFor(w.stockCode)"
+              :direction="dirFor(w.stockCode)"
+            />
+          </li>
+        </ul>
+      </BaseCard>
+    </section>
   </main>
 </template>
 
@@ -71,23 +140,21 @@ const upcoming = [
   padding: var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-6);
+}
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 .hero__hi {
-  font-size: 15px;
-  color: var(--color-text-tertiary);
-}
-.hero__name {
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: -0.03em;
-  margin-top: 2px;
-}
-.hero__profile {
-  margin-top: var(--space-4);
+  letter-spacing: -0.02em;
+  color: var(--color-text-strong);
 }
 .hero__badge {
-  display: inline-block;
+  align-self: flex-start;
   padding: 6px 12px;
   background: var(--color-primary-weak);
   color: var(--color-primary);
@@ -95,33 +162,22 @@ const upcoming = [
   font-size: 13px;
   font-weight: 600;
 }
-.section-title {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--color-text-strong);
-  padding-left: 2px;
+.list {
+  padding: var(--space-2) var(--space-4);
 }
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
+.list__item + .list__item {
+  border-top: 1px solid var(--color-divider);
 }
-.feature {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.state {
+  padding: var(--space-6) var(--space-2);
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: 14px;
 }
-.feature__icon {
-  font-size: 24px;
-  margin-bottom: var(--space-2);
-}
-.feature__title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--color-text-strong);
-}
-.feature__desc {
-  font-size: 13px;
+.state--hint small {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
   color: var(--color-text-tertiary);
 }
 </style>
