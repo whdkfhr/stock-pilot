@@ -45,6 +45,31 @@ export interface StockSummary {
   likeCount: number
 }
 
+export interface StockDetail {
+  id: number
+  code: string
+  name: string
+  price: number | null
+  watchCount: number
+  likeCount: number
+  per: number
+  pbr: number
+  roe: number
+  dividendYield: number
+}
+
+export interface PriceHistoryPoint {
+  code: string
+  price: number
+  volume: number
+  tradedAt: string
+}
+
+export interface LikeResponse {
+  code: string
+  likeCount: number
+}
+
 export interface RankingItem {
   rank: number
   code: string
