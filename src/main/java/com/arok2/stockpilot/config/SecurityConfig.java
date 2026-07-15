@@ -36,7 +36,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
-                        // 시세 조회는 공개 데이터
+                        // 종목 목록·시세 조회는 공개 데이터
+                        .requestMatchers(HttpMethod.GET, "/api/stocks").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/stocks/*/price", "/api/stocks/*/price/history").permitAll()
                         // 좋아요 수 조회·인기 랭킹 조회·조회수 기록은 공개
                         .requestMatchers(HttpMethod.GET, "/api/stocks/*/likes", "/api/rankings/**").permitAll()

@@ -36,6 +36,38 @@ export interface ApiError {
   details?: { field: string; reason: string }[]
 }
 
+export interface StockSummary {
+  id: number
+  code: string
+  name: string
+  price: number | null
+  watchCount: number
+  likeCount: number
+}
+
+export interface RankingItem {
+  rank: number
+  code: string
+  name: string
+  viewCount: number
+}
+
+export interface WatchlistItem {
+  watchlistId: number
+  stockId: number
+  stockCode: string
+  stockName: string
+  watchCount: number
+  createdAt: string
+}
+
+export interface WatchlistPage {
+  content: WatchlistItem[]
+  page: number
+  size: number
+  totalElements: number
+}
+
 export const RISK_PROFILE_LABEL: Record<RiskProfile, string> = {
   AGGRESSIVE: '공격형',
   STABLE: '안정형',
