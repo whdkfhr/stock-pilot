@@ -1,0 +1,59 @@
+/* StockPilot 디자인 토큰 — 토스증권 스타일(밝고 넓은 여백, 파란 포인트, 둥근 카드). */
+:root {
+  /* Brand */
+  --color-primary: #3182f6;
+  --color-primary-hover: #1b64da;
+  --color-primary-pressed: #1957c2;
+  --color-primary-weak: #e8f3ff;
+
+  /* 국장 색: 상승=빨강, 하락=파랑 (한국 관습) */
+  --color-up: #f04452;
+  --color-down: #3182f6;
+  --color-flat: #8b95a1;
+
+  /* Text */
+  --color-text-strong: #191f28;
+  --color-text: #333d4b;
+  --color-text-sub: #4e5968;
+  --color-text-tertiary: #8b95a1;
+  --color-text-onprimary: #ffffff;
+
+  /* Surface */
+  --color-bg: #f2f4f6;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f7f8fa;
+  --color-border: #e5e8eb;
+  --color-divider: #f2f4f6;
+
+  /* State */
+  --color-danger: #f04452;
+  --color-success: #15c47e;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* Shadow */
+  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.04), 0 2px 12px rgba(0, 0, 0, 0.04);
+  --shadow-pop: 0 4px 20px rgba(0, 0, 0, 0.1);
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Layout */
+  --app-max-width: 480px; /* 모바일 우선(토스 앱 폭) */
+
+  /* Type */
+  --font-sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
+    'Apple SD Gothic Neo', system-ui, 'Segoe UI', Roboto, sans-serif;
+}
