@@ -1,6 +1,8 @@
 package com.arok2.stockpilot.service;
 
+import com.arok2.stockpilot.dto.StockDetailResponse;
 import com.arok2.stockpilot.dto.StockSummaryResponse;
+import com.arok2.stockpilot.exception.StockNotFoundException;
 import com.arok2.stockpilot.price.cache.LatestPriceCache;
 import com.arok2.stockpilot.repository.StockRepository;
 
@@ -28,5 +30,12 @@ public class StockQueryService {
         return stockRepository.findAll().stream()
                 .map(stock -> StockSummaryResponse.of(stock, latestPriceCache.get(stock.getCode())))
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public StockDetailResponse getByCode(String code) {
+        return stockRepository.findByCode(code)
+                .map(stock -> StockDetailResponse.of(stock, latestPriceCache.get(code)))
+                .orElseThrow(() -> new StockNotFoundException(code));
     }
 }

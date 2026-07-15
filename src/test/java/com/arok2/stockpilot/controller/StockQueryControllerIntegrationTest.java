@@ -70,4 +70,24 @@ class StockQueryControllerIntegrationTest {
                 .andExpect(jsonPath("$[0].id").exists())
                 .andExpect(jsonPath("$[0].code").exists());
     }
+
+    @Test
+    void 종목_상세를_투자지표와_함께_공개로_반환한다() throws Exception {
+        when(latestPriceCache.get("005930")).thenReturn(61000L);
+
+        mockMvc.perform(get("/api/stocks/{code}", "005930"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code", is("005930")))
+                .andExpect(jsonPath("$.name", is("삼성전자")))
+                .andExpect(jsonPath("$.price", is(61000)))
+                .andExpect(jsonPath("$.per", is(12.0)))
+                .andExpect(jsonPath("$.roe", is(15.0)));
+    }
+
+    @Test
+    void 없는_종목_상세는_404() throws Exception {
+        mockMvc.perform(get("/api/stocks/{code}", "999999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code", is("STOCK_NOT_FOUND")));
+    }
 }

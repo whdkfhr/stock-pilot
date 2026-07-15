@@ -51,6 +51,10 @@ onMounted(async () => {
   }
 })
 
+function goDetail(code: string) {
+  router.push(`/stocks/${code}`)
+}
+
 function logout() {
   auth.logout()
   router.replace('/login')
@@ -79,7 +83,7 @@ function logout() {
         <div v-else-if="stocks.length === 0" class="state">등록된 종목이 없어요</div>
         <ul v-else>
           <li v-for="s in stocks" :key="s.code" class="list__item">
-            <StockRow :name="s.name" :code="s.code" :price="s.price" :direction="dirFor(s.code)" />
+            <StockRow :name="s.name" :code="s.code" :price="s.price" :direction="dirFor(s.code)" @click="goDetail(s.code)" />
           </li>
         </ul>
       </BaseCard>
@@ -99,6 +103,7 @@ function logout() {
               :price="priceFor(item.code)"
               :direction="dirFor(item.code)"
               :meta="`조회 ${formatNumber(item.viewCount)}`"
+              @click="goDetail(item.code)"
             />
           </li>
         </ul>
@@ -119,6 +124,7 @@ function logout() {
               :code="w.stockCode"
               :price="priceFor(w.stockCode)"
               :direction="dirFor(w.stockCode)"
+              @click="goDetail(w.stockCode)"
             />
           </li>
         </ul>
