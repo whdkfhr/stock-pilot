@@ -76,6 +76,19 @@ export interface LikeStatus {
   likeCount: number
 }
 
+export interface RecommendationItem {
+  code: string
+  name: string
+  score: number
+}
+
+export interface Recommendation {
+  userId: number
+  riskProfile: RiskProfile
+  generatedAt: string
+  items: RecommendationItem[]
+}
+
 export interface RankingItem {
   rank: number
   code: string

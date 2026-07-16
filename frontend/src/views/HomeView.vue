@@ -144,6 +144,7 @@ function logout() {
 .home {
   flex: 1;
   padding: var(--space-5);
+  padding-bottom: 84px;
   display: flex;
   flex-direction: column;
   gap: var(--space-6);

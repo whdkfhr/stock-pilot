@@ -8,7 +8,25 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: () => import('@/views/HomeView.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, tab: true },
+    },
+    {
+      path: '/recommend',
+      name: 'recommend',
+      component: () => import('@/views/RecommendView.vue'),
+      meta: { requiresAuth: true, tab: true },
+    },
+    {
+      path: '/notifications',
+      name: 'notifications',
+      component: () => import('@/views/ComingSoonView.vue'),
+      meta: { requiresAuth: true, tab: true, title: '알림' },
+    },
+    {
+      path: '/my',
+      name: 'my',
+      component: () => import('@/views/ComingSoonView.vue'),
+      meta: { requiresAuth: true, tab: true, title: '마이' },
     },
     {
       path: '/stocks/:code',
