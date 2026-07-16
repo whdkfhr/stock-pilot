@@ -24,11 +24,22 @@ public class LikeService {
         this.meterRegistry = meterRegistry;
     }
 
-    /** 좋아요 등록 후 현재 좋아요 수 반환. */
+    /** 좋아요 등록 후 현재 좋아요 수 반환. SADD는 멱등(1인 1좋아요). */
     public long like(Long userId, String code) {
         redisTemplate.opsForSet().add(key(code), String.valueOf(userId));
         meterRegistry.counter(StockPilotMetrics.LIKE_REGISTERED).increment();
         return count(code);
+    }
+
+    /** 좋아요 해제 후 현재 좋아요 수 반환. SREM은 멱등(안 눌렀어도 무해). */
+    public long unlike(Long userId, String code) {
+        redisTemplate.opsForSet().remove(key(code), String.valueOf(userId));
+        return count(code);
+    }
+
+    /** 해당 사용자가 이 종목을 좋아요 했는지. */
+    public boolean hasLiked(Long userId, String code) {
+        return Boolean.TRUE.equals(redisTemplate.opsForSet().isMember(key(code), String.valueOf(userId)));
     }
 
     public long count(String code) {

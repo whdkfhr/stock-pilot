@@ -30,6 +30,7 @@ stockpilot:
     secret: test-secret-that-is-at-least-32-bytes-long-000
     access-token-validity-seconds: 3600
   price:
+    source: random   # 테스트는 외부(Yahoo) 의존 없이 목 소스 사용
     collector:
       enabled: false   # 테스트 중 스케줄러가 Kafka로 발행하지 않도록 비활성
   like:
