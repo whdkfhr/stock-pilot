@@ -39,8 +39,8 @@ stockpilot:
   kafka:
     stock-price-topic: ${STOCK_PRICE_TOPIC:stock-price}
   price:
-    # 시세 소스 선택: random(데모용 랜덤워크, 기본) | yahoo(Yahoo Finance 실시간·약 15분 지연)
-    source: ${PRICE_SOURCE:random}
+    # 시세 소스 선택: yahoo(실 국장 시세, 약 15분 지연·기본) | random(외부 의존 없는 데모용 랜덤워크)
+    source: ${PRICE_SOURCE:yahoo}
     collector:
       enabled: ${PRICE_COLLECTOR_ENABLED:true}
       interval-ms: ${PRICE_COLLECTOR_INTERVAL_MS:2000}

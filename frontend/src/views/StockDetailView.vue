@@ -48,14 +48,15 @@ const metrics = computed(() => {
 onMounted(async () => {
   stocksApi.recordView(code).catch(() => {})
   try {
-    const [d, h, l] = await Promise.all([
+    const [d, h, ls] = await Promise.all([
       stocksApi.detail(code),
       stocksApi.history(code),
-      stocksApi.likes(code),
+      stocksApi.likeStatus(code), // 내가 좋아요 눌렀는지 + 총 개수
     ])
     detail.value = d.data
     prices.value = h.data.map((p) => p.price).reverse() // 최신순 → 시간순
-    likeCount.value = l.data.likeCount
+    liked.value = ls.data.liked
+    likeCount.value = ls.data.likeCount
     try {
       const wl = await stocksApi.myWatchlist(0, 100)
       watched.value = wl.data.content.some((w) => w.stockCode === code)
@@ -70,12 +71,12 @@ onMounted(async () => {
 })
 
 async function toggleLike() {
-  if (liked.value || busyLike.value) return
+  if (busyLike.value) return
   busyLike.value = true
   try {
-    const { data } = await stocksApi.like(code)
+    const { data } = liked.value ? await stocksApi.unlike(code) : await stocksApi.like(code)
     likeCount.value = data.likeCount
-    liked.value = true
+    liked.value = !liked.value
   } catch (e) {
     error.value = extractErrorMessage(e)
   } finally {

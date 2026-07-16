@@ -70,6 +70,12 @@ export interface LikeResponse {
   likeCount: number
 }
 
+export interface LikeStatus {
+  code: string
+  liked: boolean
+  likeCount: number
+}
+
 export interface RankingItem {
   rank: number
   code: string

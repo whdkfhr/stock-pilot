@@ -87,13 +87,13 @@ Redis · Kafka · Actuator/Micrometer/Prometheus/Grafana · Testcontainers · Do
 
 | 값 | 소스 | 비고 |
 |----|------|------|
-| `random` (기본) | 랜덤워크 목 | 인프라만으로 데모, 외부 의존 없음 |
-| `yahoo` | Yahoo Finance | 국장 `.KS`/`.KQ`, 약 15분 지연, 키 불필요 |
+| `yahoo` (기본) | Yahoo Finance | 국장 `.KS`/`.KQ` 실 시세, 약 15분 지연, 키 불필요 |
+| `random` | 랜덤워크 목 | 외부 의존 없음(오프라인/CI). 테스트는 항상 이 값 |
 | `kis` *(예정)* | 한국투자증권 | 실시간 체결가(REST+WebSocket), 앱키/OAuth 필요 |
 
 ```bash
-# 실 시세(야후)로 기동 — 종목코드는 자동으로 .KS(KOSPI) 심볼로 매핑
-PRICE_SOURCE=yahoo ./gradlew bootRun
+./gradlew bootRun                    # 기본: 야후 실 시세(.KS 자동 매핑)
+PRICE_SOURCE=random ./gradlew bootRun # 외부 의존 없이 목 시세로
 ```
 
 ## 로컬 실행

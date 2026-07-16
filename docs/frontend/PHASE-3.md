@@ -23,9 +23,13 @@
 `GET /api/stocks/{code}`, `/price/history`, `/likes`, `POST /like`, `POST /view`,
 `POST`·`DELETE /api/stocks/{stockId}/watch`, `GET /api/me/watchlist`
 
-## 참고 / 한계
-- "내가 이미 좋아요 했는지"를 알려주는 백엔드 API는 없어(좋아요는 Redis Set count만 노출).
-  세션 내 클릭으로만 하트 상태를 반영한다(SADD 멱등이라 중복은 무해).
+## 좋아요 토글 (후속 보강)
+초기엔 좋아요가 등록만 되고 해제가 안 됐다(Phase 5의 동시성 시연용 SADD 멱등 설계). UI 기대에 맞춰 토글로 보강:
+- 백엔드: `DELETE /api/stocks/{code}/like`(해제, SREM) + `GET /api/stocks/{code}/like/me`(내 좋아요 여부 SISMEMBER + 총 개수) 추가.
+- 프론트: 진입 시 `like/me`로 상태 복원(새로고침해도 하트 유지) → 다시 클릭하면 해제.
+
+## 실 시세 기본화
+`stockpilot.price.source` 기본값을 **yahoo**로 변경(그냥 `bootRun`하면 실 국장 시세). 테스트는 `random`으로 고정(외부 의존 없음).
 
 ## 검증
 - `npm run build` 통과, 백엔드 103개 green.

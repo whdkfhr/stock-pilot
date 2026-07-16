@@ -1,6 +1,7 @@
 import { api } from './client'
 import type {
   LikeResponse,
+  LikeStatus,
   PriceHistoryPoint,
   RankingItem,
   StockDetail,
@@ -30,8 +31,14 @@ export const stocksApi = {
   likes(code: string) {
     return api.get<LikeResponse>(`/stocks/${code}/likes`)
   },
+  likeStatus(code: string) {
+    return api.get<LikeStatus>(`/stocks/${code}/like/me`)
+  },
   like(code: string) {
     return api.post<LikeResponse>(`/stocks/${code}/like`)
+  },
+  unlike(code: string) {
+    return api.delete<LikeResponse>(`/stocks/${code}/like`)
   },
   watch(stockId: number) {
     return api.post(`/stocks/${stockId}/watch`)
