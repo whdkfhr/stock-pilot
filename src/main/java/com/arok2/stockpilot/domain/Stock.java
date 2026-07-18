@@ -36,6 +36,11 @@ public class Stock {
     @Column(name = "like_count")
     private Long likeCount;
 
+    // 상장 시장. 기존 행 호환을 위해 nullable, null이면 KOSPI로 취급.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "market")
+    private MarketType market;
+
     protected Stock() {
     }
 
@@ -43,10 +48,17 @@ public class Stock {
         this.code = code;
         this.name = name;
         this.watchCount = 0L;
+        this.market = MarketType.KOSPI;
     }
 
     public static Stock of(String code, String name, double per, double pbr, double roe, double dividendYield) {
+        return of(code, name, MarketType.KOSPI, per, pbr, roe, dividendYield);
+    }
+
+    public static Stock of(String code, String name, MarketType market,
+                           double per, double pbr, double roe, double dividendYield) {
         Stock stock = new Stock(code, name);
+        stock.market = market;
         stock.updateMetrics(per, pbr, roe, dividendYield);
         return stock;
     }
@@ -96,5 +108,14 @@ public class Stock {
 
     public void updateLikeCount(long likeCount) {
         this.likeCount = likeCount;
+    }
+
+    /** 상장 시장(기존 데이터 호환: null이면 KOSPI). */
+    public MarketType getMarket() {
+        return market == null ? MarketType.KOSPI : market;
+    }
+
+    public void updateMarket(MarketType market) {
+        this.market = market;
     }
 }

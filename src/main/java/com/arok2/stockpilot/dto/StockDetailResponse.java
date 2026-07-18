@@ -10,6 +10,8 @@ public record StockDetailResponse(
         Long id,
         String code,
         String name,
+        String market,
+        String currency,
         Long price,
         long watchCount,
         long likeCount,
@@ -21,7 +23,9 @@ public record StockDetailResponse(
     public static StockDetailResponse of(Stock stock, Long price) {
         long watch = stock.getWatchCount() == null ? 0L : stock.getWatchCount();
         return new StockDetailResponse(
-                stock.getId(), stock.getCode(), stock.getName(), price, watch, stock.getLikeCount(),
+                stock.getId(), stock.getCode(), stock.getName(),
+                stock.getMarket().name(), stock.getMarket().currency(),
+                price, watch, stock.getLikeCount(),
                 stock.getPer(), stock.getPbr(), stock.getRoe(), stock.getDividendYield());
     }
 }

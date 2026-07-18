@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { formatKRW } from '@/utils/format'
+import { formatPrice } from '@/utils/format'
 import type { Direction } from '@/utils/format'
 
 defineProps<{
   name: string
   code: string
   price?: number | null
+  currency?: string
   direction?: Direction
   rank?: number
   meta?: string
@@ -27,7 +28,7 @@ defineEmits<{ (e: 'click'): void }>()
     <span :class="['row__price', 'tabular', `dir-${direction ?? 'flat'}`]">
       <span v-if="direction === 'up'" class="row__arrow">▲</span>
       <span v-else-if="direction === 'down'" class="row__arrow">▼</span>
-      {{ formatKRW(price) }}
+      {{ formatPrice(price, currency) }}
     </span>
   </button>
 </template>

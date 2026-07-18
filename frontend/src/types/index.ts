@@ -36,10 +36,14 @@ export interface ApiError {
   details?: { field: string; reason: string }[]
 }
 
+export type MarketType = 'KOSPI' | 'KOSDAQ' | 'NASDAQ' | 'NYSE'
+
 export interface StockSummary {
   id: number
   code: string
   name: string
+  market: MarketType
+  currency: string
   price: number | null
   watchCount: number
   likeCount: number
@@ -49,6 +53,8 @@ export interface StockDetail {
   id: number
   code: string
   name: string
+  market: MarketType
+  currency: string
   price: number | null
   watchCount: number
   likeCount: number

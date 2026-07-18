@@ -26,8 +26,12 @@ public class StockQueryService {
     }
 
     @Transactional(readOnly = true)
-    public List<StockSummaryResponse> getAll() {
+    public List<StockSummaryResponse> getAll(String query) {
+        String q = query == null ? "" : query.trim().toLowerCase();
         return stockRepository.findAll().stream()
+                .filter(stock -> q.isEmpty()
+                        || stock.getName().toLowerCase().contains(q)
+                        || stock.getCode().toLowerCase().contains(q))
                 .map(stock -> StockSummaryResponse.of(stock, latestPriceCache.get(stock.getCode())))
                 .toList();
     }

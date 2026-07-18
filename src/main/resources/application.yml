@@ -43,7 +43,8 @@ stockpilot:
     source: ${PRICE_SOURCE:yahoo}
     collector:
       enabled: ${PRICE_COLLECTOR_ENABLED:true}
-      interval-ms: ${PRICE_COLLECTOR_INTERVAL_MS:2000}
+      # 종목 수가 많아 외부(Yahoo) 호출을 여유 있게 — 순차 수집이라 사실상 ~2req/s 수준
+      interval-ms: ${PRICE_COLLECTOR_INTERVAL_MS:5000}
     yahoo:
       default-suffix: ${YAHOO_DEFAULT_SUFFIX:.KS}   # KOSPI=.KS, KOSDAQ=.KQ
       # 예외 매핑(KOSDAQ 종목 등): symbols[086520]=086520.KQ

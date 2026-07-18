@@ -72,13 +72,25 @@ class StockQueryControllerIntegrationTest {
     }
 
     @Test
-    void 종목_상세를_투자지표와_함께_공개로_반환한다() throws Exception {
+    void q로_이름_검색하면_해당_종목만_반환한다() throws Exception {
+        when(latestPriceCache.get(anyString())).thenReturn(null);
+
+        mockMvc.perform(get("/api/stocks").param("q", "삼성"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].code", is("005930")));
+    }
+
+    @Test
+    void 종목_상세를_투자지표와_시장통화와_함께_공개로_반환한다() throws Exception {
         when(latestPriceCache.get("005930")).thenReturn(61000L);
 
         mockMvc.perform(get("/api/stocks/{code}", "005930"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code", is("005930")))
                 .andExpect(jsonPath("$.name", is("삼성전자")))
+                .andExpect(jsonPath("$.market", is("KOSPI")))
+                .andExpect(jsonPath("$.currency", is("KRW")))
                 .andExpect(jsonPath("$.price", is(61000)))
                 .andExpect(jsonPath("$.per", is(12.0)))
                 .andExpect(jsonPath("$.roe", is(15.0)));
