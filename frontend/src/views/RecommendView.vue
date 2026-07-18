@@ -5,7 +5,7 @@ import { recommendationsApi } from '@/api/recommendations'
 import { stocksApi } from '@/api/stocks'
 import { useAuthStore } from '@/stores/auth'
 import { extractErrorMessage } from '@/api/client'
-import { formatKRW } from '@/utils/format'
+import { formatPrice } from '@/utils/format'
 import { INVESTMENT_PERIOD_LABEL, RISK_PROFILE_LABEL } from '@/types'
 import type { Recommendation } from '@/types'
 import AppHeader from '@/components/layout/AppHeader.vue'
@@ -17,6 +17,7 @@ const router = useRouter()
 
 const rec = ref<Recommendation | null>(null)
 const priceByCode = ref<Record<string, number | null>>({})
+const currencyByCode = ref<Record<string, string>>({})
 const loading = ref(true)
 const error = ref('')
 
@@ -33,6 +34,7 @@ async function load() {
     const [r, s] = await Promise.all([recommendationsApi.get(), stocksApi.list()])
     rec.value = r.data
     priceByCode.value = Object.fromEntries(s.data.map((x) => [x.code, x.price]))
+    currencyByCode.value = Object.fromEntries(s.data.map((x) => [x.code, x.currency]))
   } catch (e) {
     error.value = extractErrorMessage(e, '추천을 불러오지 못했어요')
   } finally {
@@ -72,7 +74,9 @@ function goDetail(code: string) {
               <span class="rec-card__name">{{ item.name }}</span>
               <span class="rec-card__code">{{ item.code }}</span>
             </div>
-            <span class="rec-card__price tabular">{{ formatKRW(priceByCode[item.code] ?? null) }}</span>
+            <span class="rec-card__price tabular">{{
+              formatPrice(priceByCode[item.code] ?? null, currencyByCode[item.code])
+            }}</span>
           </div>
           <div class="score">
             <div class="score__track">

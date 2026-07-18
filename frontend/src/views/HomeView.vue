@@ -20,6 +20,26 @@ const { stocks, directions, loading } = useLiveStocks()
 const ranking = ref<RankingItem[]>([])
 const watchlist = ref<WatchlistItem[]>([])
 
+const search = ref('')
+const marketFilter = ref<'ALL' | 'KOSPI' | 'KOSDAQ' | 'US'>('ALL')
+const marketTabs = [
+  { value: 'ALL', label: '전체' },
+  { value: 'KOSPI', label: '코스피' },
+  { value: 'KOSDAQ', label: '코스닥' },
+  { value: 'US', label: '미국' },
+] as const
+
+const filteredStocks = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  return stocks.value.filter((s) => {
+    const matchQ = !q || s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q)
+    const matchMarket =
+      marketFilter.value === 'ALL' ||
+      (marketFilter.value === 'US' ? s.market === 'NASDAQ' || s.market === 'NYSE' : s.market === marketFilter.value)
+    return matchQ && matchMarket
+  })
+})
+
 const profileText = computed(() =>
   auth.me
     ? `${RISK_PROFILE_LABEL[auth.me.riskProfile]} · ${INVESTMENT_PERIOD_LABEL[auth.me.investmentPeriod]}`
@@ -33,6 +53,14 @@ const priceByCode = computed(() => {
 })
 function priceFor(code: string) {
   return priceByCode.value.get(code) ?? null
+}
+const currencyByCode = computed(() => {
+  const m = new Map<string, string>()
+  for (const s of stocks.value) m.set(s.code, s.currency)
+  return m
+})
+function currencyFor(code: string) {
+  return currencyByCode.value.get(code) ?? 'KRW'
 }
 function dirFor(code: string): Direction {
   return directions.value[code] ?? 'flat'
@@ -78,12 +106,37 @@ function logout() {
     <!-- 실시간 시세 -->
     <section>
       <SectionHeader title="실시간 시세" live />
+
+      <div class="search">
+        <span class="search__icon">🔍</span>
+        <input v-model="search" class="search__input" placeholder="종목명 · 코드 검색 (예: 삼성, AAPL)" />
+        <button v-if="search" class="search__clear" @click="search = ''">✕</button>
+      </div>
+
+      <div class="chips">
+        <button
+          v-for="t in marketTabs"
+          :key="t.value"
+          :class="['chip', { 'chip--on': marketFilter === t.value }]"
+          @click="marketFilter = t.value"
+        >
+          {{ t.label }}
+        </button>
+      </div>
+
       <BaseCard :padded="false" class="list">
         <div v-if="loading && stocks.length === 0" class="state">시세를 불러오는 중…</div>
-        <div v-else-if="stocks.length === 0" class="state">등록된 종목이 없어요</div>
+        <div v-else-if="filteredStocks.length === 0" class="state">검색 결과가 없어요</div>
         <ul v-else>
-          <li v-for="s in stocks" :key="s.code" class="list__item">
-            <StockRow :name="s.name" :code="s.code" :price="s.price" :direction="dirFor(s.code)" @click="goDetail(s.code)" />
+          <li v-for="s in filteredStocks" :key="s.code" class="list__item">
+            <StockRow
+              :name="s.name"
+              :code="s.code"
+              :price="s.price"
+              :currency="s.currency"
+              :direction="dirFor(s.code)"
+              @click="goDetail(s.code)"
+            />
           </li>
         </ul>
       </BaseCard>
@@ -101,6 +154,7 @@ function logout() {
               :name="item.name"
               :code="item.code"
               :price="priceFor(item.code)"
+              :currency="currencyFor(item.code)"
               :direction="dirFor(item.code)"
               :meta="`조회 ${formatNumber(item.viewCount)}`"
               @click="goDetail(item.code)"
@@ -123,6 +177,7 @@ function logout() {
               :name="w.stockName"
               :code="w.stockCode"
               :price="priceFor(w.stockCode)"
+              :currency="currencyFor(w.stockCode)"
               :direction="dirFor(w.stockCode)"
               @click="goDetail(w.stockCode)"
             />
@@ -168,6 +223,60 @@ function logout() {
   border-radius: var(--radius-pill);
   font-size: 13px;
   font-weight: 600;
+}
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  height: 46px;
+  margin-bottom: var(--space-3);
+}
+.search__icon {
+  font-size: 14px;
+  opacity: 0.6;
+}
+.search__input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 15px;
+  color: var(--color-text-strong);
+}
+.search__input::placeholder {
+  color: var(--color-text-tertiary);
+}
+.search__clear {
+  border: none;
+  background: var(--color-bg);
+  color: var(--color-text-tertiary);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 11px;
+}
+.chips {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.chip {
+  padding: 7px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-sub);
+}
+.chip--on {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
 }
 .list {
   padding: var(--space-2) var(--space-4);

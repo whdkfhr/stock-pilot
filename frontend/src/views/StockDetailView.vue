@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { stocksApi } from '@/api/stocks'
 import { extractErrorMessage } from '@/api/client'
-import { formatKRW, formatNumber } from '@/utils/format'
+import { formatPrice, formatNumber } from '@/utils/format'
 import type { StockDetail } from '@/types'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import Sparkline from '@/components/stock/Sparkline.vue'
@@ -121,10 +121,10 @@ async function toggleWatch() {
       <!-- 현재가 -->
       <section class="price-block">
         <p class="price-block__code">{{ detail.code }}</p>
-        <h1 class="price-block__price tabular">{{ formatKRW(currentPrice) }}</h1>
+        <h1 class="price-block__price tabular">{{ formatPrice(currentPrice, detail.currency) }}</h1>
         <p v-if="change" :class="['price-block__change', change.up ? 'dir-up' : 'dir-down']">
           <span>{{ change.up ? '▲' : '▼' }}</span>
-          <span class="tabular">{{ formatNumber(Math.abs(change.delta)) }}원</span>
+          <span class="tabular">{{ formatPrice(Math.abs(change.delta), detail.currency) }}</span>
           <span class="tabular">({{ change.pct >= 0 ? '+' : '' }}{{ change.pct.toFixed(2) }}%)</span>
         </p>
         <p v-else class="price-block__change dir-flat">데이터 수집 중</p>
