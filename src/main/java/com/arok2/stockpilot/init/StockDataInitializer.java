@@ -66,7 +66,6 @@ public class StockDataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         int inserted = 0;
-        int updated = 0;
         for (Seed s : SEEDS) {
             var existing = stockRepository.findByCode(s.code());
             if (existing.isEmpty()) {
@@ -74,17 +73,12 @@ public class StockDataInitializer implements CommandLineRunner {
                         s.per(), s.pbr(), s.roe(), s.dividendYield()));
                 inserted++;
             } else {
-                // 기존 수동 시드 종목에 시장 정보를 보정(멱등)
-                Stock stock = existing.get();
-                if (stock.getMarket() != s.market()) {
-                    stock.updateMarket(s.market());
-                    updated++;
-                }
+                // 기존 종목의 시장을 보정(멱등 backfill). 값이 같으면 변경 감지가 UPDATE를 생략한다.
+                existing.get().updateMarket(s.market());
             }
         }
-        if (inserted > 0 || updated > 0) {
-            log.info("종목 시드: {}건 삽입, {}건 시장 보정 (총 {}종목)",
-                    inserted, updated, stockRepository.count());
+        if (inserted > 0) {
+            log.info("종목 시드: {}건 삽입 (총 {}종목)", inserted, stockRepository.count());
         }
     }
 }
