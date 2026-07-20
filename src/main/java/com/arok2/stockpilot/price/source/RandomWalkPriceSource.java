@@ -22,14 +22,17 @@ public class RandomWalkPriceSource implements PriceSource {
     private static final long MIN_PRICE = 1_000L;
 
     private final Map<String, Long> lastPrice = new ConcurrentHashMap<>();
+    // 세션 기준가(전일 종가 역할). 첫 조회 시 고정되어 등락이 이 값 대비로 누적된다.
+    private final Map<String, Long> sessionOpen = new ConcurrentHashMap<>();
 
     @Override
     public StockPriceEvent fetch(String code) {
         long base = lastPrice.getOrDefault(code, DEFAULT_BASE);
+        long previousClose = sessionOpen.computeIfAbsent(code, c -> base);
         long delta = ThreadLocalRandom.current().nextLong(-500, 501);
         long price = Math.max(MIN_PRICE, base + delta);
         lastPrice.put(code, price);
         long volume = ThreadLocalRandom.current().nextLong(100, 10_000);
-        return new StockPriceEvent(code, price, volume, Instant.now());
+        return new StockPriceEvent(code, price, volume, Instant.now(), previousClose);
     }
 }

@@ -3,8 +3,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { stocksApi } from '@/api/stocks'
 import { extractErrorMessage } from '@/api/client'
-import { formatPrice, formatNumber } from '@/utils/format'
-import type { StockDetail } from '@/types'
+import { formatPrice, formatChange, formatPercent, formatNumber, directionFromChange } from '@/utils/format'
+import type { StockDetail, TradingTrend } from '@/types'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import Sparkline from '@/components/stock/Sparkline.vue'
 
@@ -13,7 +13,6 @@ const router = useRouter()
 const code = route.params.code as string
 
 const detail = ref<StockDetail | null>(null)
-const prices = ref<number[]>([])
 const likeCount = ref(0)
 const liked = ref(false)
 const watched = ref(false)
@@ -22,17 +21,20 @@ const error = ref('')
 const busyLike = ref(false)
 const busyWatch = ref(false)
 
-const currentPrice = computed(
-  () => detail.value?.price ?? (prices.value.length ? prices.value[prices.value.length - 1] : null),
-)
+// 차트
+const periods = [
+  { value: '1D', label: '1일' },
+  { value: '1W', label: '1주' },
+  { value: '1M', label: '1달' },
+]
+const period = ref('1D')
+const chartValues = ref<number[]>([])
+const chartLoading = ref(false)
 
-const change = computed(() => {
-  if (prices.value.length < 2 || currentPrice.value == null) return null
-  const first = prices.value[0]
-  const delta = currentPrice.value - first
-  const pct = first ? (delta / first) * 100 : 0
-  return { delta, pct, up: delta >= 0 }
-})
+// 투자자 매매동향
+const trend = ref<TradingTrend | null>(null)
+
+const changeDir = computed(() => directionFromChange(detail.value?.change ?? null))
 
 const metrics = computed(() => {
   const d = detail.value
@@ -45,18 +47,33 @@ const metrics = computed(() => {
   ]
 })
 
+async function loadChart() {
+  chartLoading.value = true
+  try {
+    const { data } = await stocksApi.chart(code, period.value)
+    chartValues.value = data.points.map((p) => p.close)
+  } catch {
+    chartValues.value = []
+  } finally {
+    chartLoading.value = false
+  }
+}
+
+function selectPeriod(p: string) {
+  if (period.value === p) return
+  period.value = p
+  loadChart()
+}
+
 onMounted(async () => {
   stocksApi.recordView(code).catch(() => {})
   try {
-    const [d, h, ls] = await Promise.all([
-      stocksApi.detail(code),
-      stocksApi.history(code),
-      stocksApi.likeStatus(code), // 내가 좋아요 눌렀는지 + 총 개수
-    ])
+    const [d, ls] = await Promise.all([stocksApi.detail(code), stocksApi.likeStatus(code)])
     detail.value = d.data
-    prices.value = h.data.map((p) => p.price).reverse() // 최신순 → 시간순
     liked.value = ls.data.liked
     likeCount.value = ls.data.likeCount
+    loadChart()
+    stocksApi.tradingTrend(code).then((r) => (trend.value = r.data)).catch(() => {})
     try {
       const wl = await stocksApi.myWatchlist(0, 100)
       watched.value = wl.data.content.some((w) => w.stockCode === code)
@@ -120,20 +137,53 @@ async function toggleWatch() {
     <template v-else-if="detail">
       <!-- 현재가 -->
       <section class="price-block">
-        <p class="price-block__code">{{ detail.code }}</p>
-        <h1 class="price-block__price tabular">{{ formatPrice(currentPrice, detail.currency) }}</h1>
-        <p v-if="change" :class="['price-block__change', change.up ? 'dir-up' : 'dir-down']">
-          <span>{{ change.up ? '▲' : '▼' }}</span>
-          <span class="tabular">{{ formatPrice(Math.abs(change.delta), detail.currency) }}</span>
-          <span class="tabular">({{ change.pct >= 0 ? '+' : '' }}{{ change.pct.toFixed(2) }}%)</span>
+        <p class="price-block__code">{{ detail.code }} · {{ detail.market }}</p>
+        <h1 class="price-block__price tabular">{{ formatPrice(detail.price, detail.currency) }}</h1>
+        <p v-if="detail.change != null" :class="['price-block__change', `dir-${changeDir}`]">
+          <span>{{ detail.change > 0 ? '▲' : detail.change < 0 ? '▼' : '' }}</span>
+          <span class="tabular">{{ formatChange(detail.change, detail.currency).replace(/^[+-]/, '') }}</span>
+          <span class="tabular">({{ formatPercent(detail.changePercent) }})</span>
+          <span class="price-block__prev">전일 대비</span>
         </p>
         <p v-else class="price-block__change dir-flat">데이터 수집 중</p>
       </section>
 
-      <!-- 미니차트 -->
+      <!-- 기간별 차트 -->
       <BaseCard>
-        <p class="card-label">최근 시세 흐름</p>
-        <Sparkline :values="prices" />
+        <div class="chart-head">
+          <p class="card-label">시세 차트</p>
+          <div class="pchips">
+            <button
+              v-for="p in periods"
+              :key="p.value"
+              :class="['pchip', { 'pchip--on': period === p.value }]"
+              @click="selectPeriod(p.value)"
+            >
+              {{ p.label }}
+            </button>
+          </div>
+        </div>
+        <div v-if="chartLoading && chartValues.length === 0" class="chart-state">차트 불러오는 중…</div>
+        <Sparkline v-else :values="chartValues" :height="140" />
+      </BaseCard>
+
+      <!-- 투자자 매매동향 -->
+      <BaseCard v-if="trend && trend.sample && trend.flows.length">
+        <div class="chart-head">
+          <p class="card-label">투자자 매매동향 (당일 순매수)</p>
+          <span class="sample-badge">샘플</span>
+        </div>
+        <ul class="flows">
+          <li v-for="f in trend.flows" :key="f.investor" class="flow">
+            <span class="flow__label">{{ f.investor }}</span>
+            <span
+              :class="['flow__value', 'tabular', f.netBuy >= 0 ? 'dir-up' : 'dir-down']"
+            >
+              {{ f.netBuy > 0 ? '+' : '' }}{{ formatNumber(f.netBuy) }} {{ trend.unit }}
+            </span>
+          </li>
+        </ul>
+        <p class="flow__note">※ 개인/외국인/기관 수급은 데모 샘플이며, KIS(한국투자증권) 연동 시 실데이터로 교체돼요.</p>
       </BaseCard>
 
       <!-- 투자지표 -->
@@ -164,11 +214,7 @@ async function toggleWatch() {
 
   <!-- 액션 바 -->
   <div v-if="detail && !loading" class="action-bar">
-    <button
-      :class="['action', { 'action--on': liked }]"
-      :disabled="busyLike"
-      @click="toggleLike"
-    >
+    <button :class="['action', { 'action--on': liked }]" :disabled="busyLike" @click="toggleLike">
       {{ liked ? '❤️' : '🤍' }} 좋아요
     </button>
     <button
@@ -235,6 +281,12 @@ async function toggleWatch() {
   font-size: 15px;
   font-weight: 600;
 }
+.price-block__prev {
+  color: var(--color-text-tertiary);
+  font-weight: 500;
+  font-size: 12px;
+  margin-left: 2px;
+}
 .dir-up {
   color: var(--color-up);
 }
@@ -244,15 +296,79 @@ async function toggleWatch() {
 .dir-flat {
   color: var(--color-text-tertiary);
 }
+.chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
 .card-label,
 .section-label {
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-sub);
-  margin-bottom: var(--space-3);
 }
 .section-label {
   padding-left: 2px;
+  margin-bottom: var(--space-3);
+}
+.pchips {
+  display: flex;
+  gap: 6px;
+}
+.pchip {
+  padding: 5px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-sub);
+}
+.pchip--on {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+.chart-state {
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-tertiary);
+  font-size: 14px;
+}
+.sample-badge {
+  padding: 3px 8px;
+  background: var(--color-bg);
+  color: var(--color-text-tertiary);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+}
+.flows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.flow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.flow__label {
+  font-size: 14px;
+  color: var(--color-text-sub);
+}
+.flow__value {
+  font-size: 15px;
+  font-weight: 700;
+}
+.flow__note {
+  margin-top: var(--space-3);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  line-height: 1.4;
 }
 .metrics {
   display: grid;

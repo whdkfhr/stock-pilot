@@ -73,7 +73,11 @@ public class YahooPriceSource implements PriceSource {
             }
             long price = Math.round(meta.path("regularMarketPrice").asDouble());
             long volume = meta.path("regularMarketVolume").asLong(0);
-            return new StockPriceEvent(code, price, volume, Instant.now());
+            // 전일 종가(등락 계산용). 없으면 현재가로 대체(등락 0).
+            double prevCloseRaw = meta.path("previousClose").asDouble(
+                    meta.path("chartPreviousClose").asDouble(price));
+            long previousClose = Math.round(prevCloseRaw);
+            return new StockPriceEvent(code, price, volume, Instant.now(), previousClose);
         } catch (IllegalStateException e) {
             throw e;
         } catch (Exception e) {

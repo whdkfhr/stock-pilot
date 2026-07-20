@@ -3,10 +3,10 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useLiveStocks } from '@/composables/useLiveStocks'
+import { useMarketStatus } from '@/composables/useMarketStatus'
 import { stocksApi } from '@/api/stocks'
 import { INVESTMENT_PERIOD_LABEL, RISK_PROFILE_LABEL } from '@/types'
 import type { RankingItem, WatchlistItem } from '@/types'
-import type { Direction } from '@/utils/format'
 import { formatNumber } from '@/utils/format'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
@@ -15,7 +15,8 @@ import StockRow from '@/components/stock/StockRow.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
-const { stocks, directions, loading } = useLiveStocks()
+const { stocks, loading } = useLiveStocks()
+const { krxOpen, usOpen } = useMarketStatus()
 
 const ranking = ref<RankingItem[]>([])
 const watchlist = ref<WatchlistItem[]>([])
@@ -54,16 +55,19 @@ const priceByCode = computed(() => {
 function priceFor(code: string) {
   return priceByCode.value.get(code) ?? null
 }
-const currencyByCode = computed(() => {
-  const m = new Map<string, string>()
-  for (const s of stocks.value) m.set(s.code, s.currency)
+const stockByCode = computed(() => {
+  const m = new Map<string, (typeof stocks.value)[number]>()
+  for (const s of stocks.value) m.set(s.code, s)
   return m
 })
 function currencyFor(code: string) {
-  return currencyByCode.value.get(code) ?? 'KRW'
+  return stockByCode.value.get(code)?.currency ?? 'KRW'
 }
-function dirFor(code: string): Direction {
-  return directions.value[code] ?? 'flat'
+function changeFor(code: string) {
+  return stockByCode.value.get(code)?.change ?? null
+}
+function changePercentFor(code: string) {
+  return stockByCode.value.get(code)?.changePercent ?? null
 }
 
 onMounted(async () => {
@@ -105,7 +109,18 @@ function logout() {
 
     <!-- 실시간 시세 -->
     <section>
-      <SectionHeader title="실시간 시세" live />
+      <SectionHeader title="실시간 시세" live>
+        <template #action>
+          <span class="mkt">
+            <span :class="['mkt__dot', krxOpen ? 'mkt__dot--open' : 'mkt__dot--closed']" />국내
+            {{ krxOpen ? '개장' : '휴장' }}
+          </span>
+          <span class="mkt">
+            <span :class="['mkt__dot', usOpen ? 'mkt__dot--open' : 'mkt__dot--closed']" />미국
+            {{ usOpen ? '개장' : '휴장' }}
+          </span>
+        </template>
+      </SectionHeader>
 
       <div class="search">
         <span class="search__icon">🔍</span>
@@ -134,7 +149,8 @@ function logout() {
               :code="s.code"
               :price="s.price"
               :currency="s.currency"
-              :direction="dirFor(s.code)"
+              :change="s.change"
+              :change-percent="s.changePercent"
               @click="goDetail(s.code)"
             />
           </li>
@@ -155,7 +171,8 @@ function logout() {
               :code="item.code"
               :price="priceFor(item.code)"
               :currency="currencyFor(item.code)"
-              :direction="dirFor(item.code)"
+              :change="changeFor(item.code)"
+              :change-percent="changePercentFor(item.code)"
               :meta="`조회 ${formatNumber(item.viewCount)}`"
               @click="goDetail(item.code)"
             />
@@ -178,7 +195,8 @@ function logout() {
               :code="w.stockCode"
               :price="priceFor(w.stockCode)"
               :currency="currencyFor(w.stockCode)"
-              :direction="dirFor(w.stockCode)"
+              :change="changeFor(w.stockCode)"
+              :change-percent="changePercentFor(w.stockCode)"
               @click="goDetail(w.stockCode)"
             />
           </li>
@@ -223,6 +241,30 @@ function logout() {
   border-radius: var(--radius-pill);
   font-size: 13px;
   font-weight: 600;
+}
+.mkt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+}
+.mkt:first-of-type {
+  margin-left: auto;
+}
+.mkt__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.mkt__dot--open {
+  background: var(--color-success);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-success) 25%, transparent);
+}
+.mkt__dot--closed {
+  background: var(--color-text-tertiary);
+  opacity: 0.5;
 }
 .search {
   display: flex;

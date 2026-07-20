@@ -97,6 +97,17 @@ class StockQueryControllerIntegrationTest {
     }
 
     @Test
+    void 전일종가가_있으면_등락을_계산해_내려준다() throws Exception {
+        when(latestPriceCache.get("005930")).thenReturn(61000L);
+        when(latestPriceCache.getPreviousClose("005930")).thenReturn(60000L);
+
+        mockMvc.perform(get("/api/stocks/{code}", "005930"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.change", is(1000)))
+                .andExpect(jsonPath("$.changePercent", is(1.67)));
+    }
+
+    @Test
     void 없는_종목_상세는_404() throws Exception {
         mockMvc.perform(get("/api/stocks/{code}", "999999"))
                 .andExpect(status().isNotFound())

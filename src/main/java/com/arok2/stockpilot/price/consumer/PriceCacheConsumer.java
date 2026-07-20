@@ -29,7 +29,7 @@ public class PriceCacheConsumer {
     public void consume(String payload) {
         try {
             StockPriceEvent event = objectMapper.readValue(payload, StockPriceEvent.class);
-            latestPriceCache.update(event.code(), event.price());
+            latestPriceCache.update(event.code(), event.price(), event.previousClose());
         } catch (Exception e) {
             log.warn("최신가 갱신 실패 (payload={}): {}", payload, e.getMessage());
         }
