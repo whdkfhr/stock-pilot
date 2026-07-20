@@ -70,13 +70,29 @@ export interface StockDetail {
 
 export interface ChartPoint {
   time: string
+  open: number
+  high: number
+  low: number
   close: number
+  volume: number
 }
 
 export interface ChartResponse {
   code: string
   period: string
   points: ChartPoint[]
+}
+
+export interface QuoteResponse {
+  code: string
+  currency: string
+  dayHigh: number | null
+  dayLow: number | null
+  volume: number | null
+  week52High: number | null
+  week52Low: number | null
+  name: string | null
+  exchange: string | null
 }
 
 export interface InvestorFlow {
