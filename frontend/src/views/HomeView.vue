@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useLiveStocks } from '@/composables/useLiveStocks'
-import { useMarketStatus } from '@/composables/useMarketStatus'
+import { useMarketStatus, type MarketSession } from '@/composables/useMarketStatus'
 import { stocksApi } from '@/api/stocks'
 import { INVESTMENT_PERIOD_LABEL, RISK_PROFILE_LABEL } from '@/types'
 import type { RankingItem, WatchlistItem } from '@/types'
@@ -16,7 +16,13 @@ import StockRow from '@/components/stock/StockRow.vue'
 const auth = useAuthStore()
 const router = useRouter()
 const { stocks, loading } = useLiveStocks()
-const { krxOpen, usOpen } = useMarketStatus()
+const { krx, us } = useMarketStatus()
+
+function sessionDot(s: MarketSession) {
+  if (s === 'regular') return 'mkt__dot--open'
+  if (s === 'closed') return 'mkt__dot--closed'
+  return 'mkt__dot--ext'
+}
 
 const ranking = ref<RankingItem[]>([])
 const watchlist = ref<WatchlistItem[]>([])
@@ -112,12 +118,10 @@ function logout() {
       <SectionHeader title="실시간 시세" live>
         <template #action>
           <span class="mkt">
-            <span :class="['mkt__dot', krxOpen ? 'mkt__dot--open' : 'mkt__dot--closed']" />국내
-            {{ krxOpen ? '개장' : '휴장' }}
+            <span :class="['mkt__dot', sessionDot(krx.session)]" />국내 {{ krx.label }}
           </span>
           <span class="mkt">
-            <span :class="['mkt__dot', usOpen ? 'mkt__dot--open' : 'mkt__dot--closed']" />미국
-            {{ usOpen ? '개장' : '휴장' }}
+            <span :class="['mkt__dot', sessionDot(us.session)]" />미국 {{ us.label }}
           </span>
         </template>
       </SectionHeader>
@@ -261,6 +265,10 @@ function logout() {
 .mkt__dot--open {
   background: var(--color-success);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-success) 25%, transparent);
+}
+.mkt__dot--ext {
+  background: var(--color-warning);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-warning) 25%, transparent);
 }
 .mkt__dot--closed {
   background: var(--color-text-tertiary);
