@@ -45,6 +45,8 @@ export interface StockSummary {
   market: MarketType
   currency: string
   price: number | null
+  change: number | null
+  changePercent: number | null
   watchCount: number
   likeCount: number
 }
@@ -56,12 +58,37 @@ export interface StockDetail {
   market: MarketType
   currency: string
   price: number | null
+  change: number | null
+  changePercent: number | null
   watchCount: number
   likeCount: number
   per: number
   pbr: number
   roe: number
   dividendYield: number
+}
+
+export interface ChartPoint {
+  time: string
+  close: number
+}
+
+export interface ChartResponse {
+  code: string
+  period: string
+  points: ChartPoint[]
+}
+
+export interface InvestorFlow {
+  investor: string
+  netBuy: number
+}
+
+export interface TradingTrend {
+  code: string
+  unit: string
+  sample: boolean
+  flows: InvestorFlow[]
 }
 
 export interface PriceHistoryPoint {

@@ -26,11 +26,11 @@ class PriceCacheConsumerTest {
     void 시세이벤트를_받아_최신가_캐시를_갱신한다() throws Exception {
         PriceCacheConsumer consumer = new PriceCacheConsumer(latestPriceCache, objectMapper);
         String payload = objectMapper.writeValueAsString(
-                new StockPriceEvent("000660", 130000, 900, Instant.now()));
+                new StockPriceEvent("000660", 130000, 900, Instant.now(), 128000));
 
         consumer.consume(payload);
 
-        verify(latestPriceCache).update("000660", 130000);
+        verify(latestPriceCache).update("000660", 130000, 128000);
     }
 
     @Test

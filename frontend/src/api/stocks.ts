@@ -1,11 +1,13 @@
 import { api } from './client'
 import type {
+  ChartResponse,
   LikeResponse,
   LikeStatus,
   PriceHistoryPoint,
   RankingItem,
   StockDetail,
   StockSummary,
+  TradingTrend,
   WatchlistPage,
 } from '@/types'
 
@@ -18,6 +20,12 @@ export const stocksApi = {
   },
   history(code: string) {
     return api.get<PriceHistoryPoint[]>(`/stocks/${code}/price/history`)
+  },
+  chart(code: string, period: string) {
+    return api.get<ChartResponse>(`/stocks/${code}/chart`, { params: { period } })
+  },
+  tradingTrend(code: string) {
+    return api.get<TradingTrend>(`/stocks/${code}/trading-trend`)
   },
   popularRanking(limit = 10) {
     return api.get<RankingItem[]>('/rankings/popular', { params: { limit } })

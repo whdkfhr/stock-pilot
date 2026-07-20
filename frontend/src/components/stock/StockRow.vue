@@ -1,18 +1,20 @@
 <script setup lang="ts">
-import { formatPrice } from '@/utils/format'
-import type { Direction } from '@/utils/format'
+import { formatPrice, formatChange, formatPercent, directionFromChange } from '@/utils/format'
 
-defineProps<{
+const props = defineProps<{
   name: string
   code: string
   price?: number | null
   currency?: string
-  direction?: Direction
+  change?: number | null
+  changePercent?: number | null
   rank?: number
   meta?: string
 }>()
 
 defineEmits<{ (e: 'click'): void }>()
+
+const dir = () => directionFromChange(props.change)
 </script>
 
 <template>
@@ -25,10 +27,11 @@ defineEmits<{ (e: 'click'): void }>()
         <span v-if="meta" class="row__meta">· {{ meta }}</span>
       </span>
     </span>
-    <span :class="['row__price', 'tabular', `dir-${direction ?? 'flat'}`]">
-      <span v-if="direction === 'up'" class="row__arrow">▲</span>
-      <span v-else-if="direction === 'down'" class="row__arrow">▼</span>
-      {{ formatPrice(price, currency) }}
+    <span class="row__pricebox">
+      <span class="row__price tabular">{{ formatPrice(price, currency) }}</span>
+      <span v-if="change != null" :class="['row__change', 'tabular', `dir-${dir()}`]">
+        {{ formatChange(change, currency) }} ({{ formatPercent(changePercent) }})
+      </span>
     </span>
   </button>
 </template>
@@ -77,22 +80,29 @@ defineEmits<{ (e: 'click'): void }>()
   font-size: 12px;
   color: var(--color-text-tertiary);
 }
+.row__pricebox {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
 .row__price {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
   font-size: 15px;
   font-weight: 600;
   color: var(--color-text-strong);
-  flex-shrink: 0;
 }
-.row__arrow {
-  font-size: 10px;
+.row__change {
+  font-size: 12px;
+  font-weight: 600;
 }
 .dir-up {
   color: var(--color-up);
 }
 .dir-down {
   color: var(--color-down);
+}
+.dir-flat {
+  color: var(--color-text-tertiary);
 }
 </style>

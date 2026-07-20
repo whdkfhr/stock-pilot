@@ -32,14 +32,18 @@ public class StockQueryService {
                 .filter(stock -> q.isEmpty()
                         || stock.getName().toLowerCase().contains(q)
                         || stock.getCode().toLowerCase().contains(q))
-                .map(stock -> StockSummaryResponse.of(stock, latestPriceCache.get(stock.getCode())))
+                .map(stock -> StockSummaryResponse.of(stock,
+                        latestPriceCache.get(stock.getCode()),
+                        latestPriceCache.getPreviousClose(stock.getCode())))
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public StockDetailResponse getByCode(String code) {
         return stockRepository.findByCode(code)
-                .map(stock -> StockDetailResponse.of(stock, latestPriceCache.get(code)))
+                .map(stock -> StockDetailResponse.of(stock,
+                        latestPriceCache.get(code),
+                        latestPriceCache.getPreviousClose(code)))
                 .orElseThrow(() -> new StockNotFoundException(code));
     }
 }
