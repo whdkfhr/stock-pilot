@@ -4,6 +4,7 @@ import type {
   LikeResponse,
   LikeStatus,
   PriceHistoryPoint,
+  QuoteResponse,
   RankingItem,
   StockDetail,
   StockSummary,
@@ -23,6 +24,9 @@ export const stocksApi = {
   },
   chart(code: string, period: string) {
     return api.get<ChartResponse>(`/stocks/${code}/chart`, { params: { period } })
+  },
+  quote(code: string) {
+    return api.get<QuoteResponse>(`/stocks/${code}/quote`)
   },
   tradingTrend(code: string) {
     return api.get<TradingTrend>(`/stocks/${code}/trading-trend`)

@@ -4,9 +4,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { stocksApi } from '@/api/stocks'
 import { extractErrorMessage } from '@/api/client'
 import { formatPrice, formatChange, formatPercent, formatNumber, directionFromChange } from '@/utils/format'
-import type { StockDetail, TradingTrend } from '@/types'
+import type { ChartPoint, QuoteResponse, StockDetail, TradingTrend } from '@/types'
 import BaseCard from '@/components/ui/BaseCard.vue'
-import Sparkline from '@/components/stock/Sparkline.vue'
+import CandleChart from '@/components/stock/CandleChart.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,13 +28,24 @@ const periods = [
   { value: '1M', label: '1달' },
 ]
 const period = ref('1D')
-const chartValues = ref<number[]>([])
+const chartPoints = ref<ChartPoint[]>([])
 const chartLoading = ref(false)
 
-// 투자자 매매동향
+// 시세 요약 + 투자자 매매동향
+const quote = ref<QuoteResponse | null>(null)
 const trend = ref<TradingTrend | null>(null)
 
 const changeDir = computed(() => directionFromChange(detail.value?.change ?? null))
+
+// 52주 최고/최저 대비 현재가 위치(0~1)
+const week52Pos = computed(() => {
+  const q = quote.value
+  const price = detail.value?.price
+  if (!q || q.week52High == null || q.week52Low == null || price == null) return null
+  const span = q.week52High - q.week52Low
+  if (span <= 0) return null
+  return Math.min(1, Math.max(0, (price - q.week52Low) / span))
+})
 
 const metrics = computed(() => {
   const d = detail.value
@@ -51,9 +62,9 @@ async function loadChart() {
   chartLoading.value = true
   try {
     const { data } = await stocksApi.chart(code, period.value)
-    chartValues.value = data.points.map((p) => p.close)
+    chartPoints.value = data.points
   } catch {
-    chartValues.value = []
+    chartPoints.value = []
   } finally {
     chartLoading.value = false
   }
@@ -73,6 +84,7 @@ onMounted(async () => {
     liked.value = ls.data.liked
     likeCount.value = ls.data.likeCount
     loadChart()
+    stocksApi.quote(code).then((r) => (quote.value = r.data)).catch(() => {})
     stocksApi.tradingTrend(code).then((r) => (trend.value = r.data)).catch(() => {})
     try {
       const wl = await stocksApi.myWatchlist(0, 100)
@@ -163,8 +175,42 @@ async function toggleWatch() {
             </button>
           </div>
         </div>
-        <div v-if="chartLoading && chartValues.length === 0" class="chart-state">차트 불러오는 중…</div>
-        <Sparkline v-else :values="chartValues" :height="140" />
+        <div v-if="chartLoading && chartPoints.length === 0" class="chart-state">차트 불러오는 중…</div>
+        <CandleChart v-else :points="chartPoints" :height="200" />
+      </BaseCard>
+
+      <!-- 오늘의 시세 -->
+      <BaseCard v-if="quote">
+        <p class="card-label">오늘의 시세</p>
+        <div class="quote-grid">
+          <div class="qitem">
+            <span class="qitem__label">고가</span>
+            <span class="qitem__value tabular dir-up">{{ formatPrice(quote.dayHigh, detail.currency) }}</span>
+          </div>
+          <div class="qitem">
+            <span class="qitem__label">저가</span>
+            <span class="qitem__value tabular dir-down">{{ formatPrice(quote.dayLow, detail.currency) }}</span>
+          </div>
+          <div class="qitem">
+            <span class="qitem__label">거래량</span>
+            <span class="qitem__value tabular">{{ quote.volume != null ? formatNumber(quote.volume) : '—' }}</span>
+          </div>
+        </div>
+      </BaseCard>
+
+      <!-- 52주 최고/최저 -->
+      <BaseCard v-if="week52Pos != null && quote">
+        <p class="card-label">52주 최고 · 최저</p>
+        <div class="gauge">
+          <div class="gauge__bar">
+            <div class="gauge__marker" :style="{ left: `${week52Pos * 100}%` }" />
+          </div>
+          <div class="gauge__ends">
+            <span class="tabular dir-down">{{ formatPrice(quote.week52Low, detail.currency) }}</span>
+            <span class="gauge__cur tabular">현재 {{ formatPrice(detail.price, detail.currency) }}</span>
+            <span class="tabular dir-up">{{ formatPrice(quote.week52High, detail.currency) }}</span>
+          </div>
+        </div>
       </BaseCard>
 
       <!-- 투자자 매매동향 -->
@@ -196,6 +242,23 @@ async function toggleWatch() {
           </BaseCard>
         </div>
       </section>
+
+      <!-- 종목 정보 -->
+      <BaseCard>
+        <p class="card-label">종목 정보</p>
+        <ul class="info">
+          <li class="info__row"><span class="info__k">시장</span><span class="info__v">{{ detail.market }}</span></li>
+          <li v-if="quote?.exchange" class="info__row">
+            <span class="info__k">거래소</span><span class="info__v">{{ quote.exchange }}</span>
+          </li>
+          <li v-if="quote?.name" class="info__row">
+            <span class="info__k">영문명</span><span class="info__v">{{ quote.name }}</span>
+          </li>
+          <li class="info__row">
+            <span class="info__k">배당수익률</span><span class="info__v tabular">{{ detail.dividendYield.toFixed(2) }}%</span>
+          </li>
+        </ul>
+      </BaseCard>
 
       <!-- 인기 지표 -->
       <BaseCard class="stat-row">
@@ -369,6 +432,78 @@ async function toggleWatch() {
   font-size: 11px;
   color: var(--color-text-tertiary);
   line-height: 1.4;
+}
+.quote-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--space-3);
+}
+.qitem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.qitem__label {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+.qitem__value {
+  font-size: 15px;
+  font-weight: 700;
+}
+.gauge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.gauge__bar {
+  position: relative;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(to right, var(--color-down), var(--color-text-tertiary), var(--color-up));
+  opacity: 0.9;
+}
+.gauge__marker {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 3px solid var(--color-text-strong);
+  transform: translate(-50%, -50%);
+}
+.gauge__ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+}
+.gauge__cur {
+  color: var(--color-text-strong);
+  font-weight: 700;
+}
+.info {
+  display: flex;
+  flex-direction: column;
+}
+.info__row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  font-size: 14px;
+}
+.info__row + .info__row {
+  border-top: 1px solid var(--color-divider);
+}
+.info__k {
+  color: var(--color-text-sub);
+}
+.info__v {
+  font-weight: 600;
+  color: var(--color-text-strong);
+  max-width: 60%;
+  text-align: right;
 }
 .metrics {
   display: grid;
