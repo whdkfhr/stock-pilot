@@ -16,6 +16,19 @@ export function formatPrice(n: number | null | undefined, currency?: string): st
   return `${formatNumber(n)}원`
 }
 
+/** 큰 금액 축약 표기(거래대금 등). KRW: 조/억, USD: B/M. */
+export function formatAmount(n: number | null | undefined, currency?: string): string {
+  if (n == null) return '—'
+  if (currency === 'USD') {
+    if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`
+    if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`
+    return `$${formatNumber(n)}`
+  }
+  if (n >= 1e12) return `${(n / 1e12).toFixed(2)}조원`
+  if (n >= 1e8) return `${formatNumber(Math.round(n / 1e8))}억원`
+  return `${formatNumber(n)}원`
+}
+
 /** 부호 붙인 등락가격. 예: +1,200원, -$3 */
 export function formatChange(change: number | null | undefined, currency?: string): string {
   if (change == null) return ''
