@@ -3,10 +3,18 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { stocksApi } from '@/api/stocks'
 import { extractErrorMessage } from '@/api/client'
-import { formatPrice, formatChange, formatPercent, formatNumber, directionFromChange } from '@/utils/format'
-import type { ChartPoint, QuoteResponse, StockDetail, TradingTrend } from '@/types'
+import {
+  formatPrice,
+  formatChange,
+  formatPercent,
+  formatNumber,
+  formatAmount,
+  directionFromChange,
+} from '@/utils/format'
+import type { ChartPoint, QuoteResponse, StockDetail, StockSummary, TradingTrend } from '@/types'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import CandleChart from '@/components/stock/CandleChart.vue'
+import StockRow from '@/components/stock/StockRow.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,11 +39,24 @@ const period = ref('1D')
 const chartPoints = ref<ChartPoint[]>([])
 const chartLoading = ref(false)
 
-// 시세 요약 + 투자자 매매동향
+// 시세 요약 + 투자자 매매동향 + 관련 종목
 const quote = ref<QuoteResponse | null>(null)
 const trend = ref<TradingTrend | null>(null)
+const related = ref<StockSummary[]>([])
 
 const changeDir = computed(() => directionFromChange(detail.value?.change ?? null))
+
+// 전일 종가 = 현재가 - 등락
+const prevClose = computed(() => {
+  const d = detail.value
+  return d && d.price != null && d.change != null ? d.price - d.change : null
+})
+// 거래대금 = 거래량 × 현재가
+const tradingValue = computed(() => {
+  const v = quote.value?.volume
+  const p = detail.value?.price
+  return v != null && p != null ? v * p : null
+})
 
 // 52주 최고/최저 대비 현재가 위치(0~1)
 const week52Pos = computed(() => {
@@ -86,6 +107,13 @@ onMounted(async () => {
     loadChart()
     stocksApi.quote(code).then((r) => (quote.value = r.data)).catch(() => {})
     stocksApi.tradingTrend(code).then((r) => (trend.value = r.data)).catch(() => {})
+    // 관련 종목: 같은 시장의 다른 종목
+    stocksApi
+      .list()
+      .then((r) => {
+        related.value = r.data.filter((s) => s.market === d.data.market && s.code !== code).slice(0, 5)
+      })
+      .catch(() => {})
     try {
       const wl = await stocksApi.myWatchlist(0, 100)
       watched.value = wl.data.content.some((w) => w.stockCode === code)
@@ -184,6 +212,10 @@ async function toggleWatch() {
         <p class="card-label">오늘의 시세</p>
         <div class="quote-grid">
           <div class="qitem">
+            <span class="qitem__label">전일종가</span>
+            <span class="qitem__value tabular">{{ formatPrice(prevClose, detail.currency) }}</span>
+          </div>
+          <div class="qitem">
             <span class="qitem__label">고가</span>
             <span class="qitem__value tabular dir-up">{{ formatPrice(quote.dayHigh, detail.currency) }}</span>
           </div>
@@ -194,6 +226,10 @@ async function toggleWatch() {
           <div class="qitem">
             <span class="qitem__label">거래량</span>
             <span class="qitem__value tabular">{{ quote.volume != null ? formatNumber(quote.volume) : '—' }}</span>
+          </div>
+          <div class="qitem">
+            <span class="qitem__label">거래대금</span>
+            <span class="qitem__value tabular">{{ formatAmount(tradingValue, detail.currency) }}</span>
           </div>
         </div>
       </BaseCard>
@@ -259,6 +295,26 @@ async function toggleWatch() {
           </li>
         </ul>
       </BaseCard>
+
+      <!-- 관련 종목 (같은 시장) -->
+      <section v-if="related.length">
+        <p class="section-label">같은 시장 종목</p>
+        <BaseCard :padded="false" class="related">
+          <ul>
+            <li v-for="s in related" :key="s.code" class="related__item">
+              <StockRow
+                :name="s.name"
+                :code="s.code"
+                :price="s.price"
+                :currency="s.currency"
+                :change="s.change"
+                :change-percent="s.changePercent"
+                @click="router.push(`/stocks/${s.code}`)"
+              />
+            </li>
+          </ul>
+        </BaseCard>
+      </section>
 
       <!-- 인기 지표 -->
       <BaseCard class="stat-row">
@@ -504,6 +560,12 @@ async function toggleWatch() {
   color: var(--color-text-strong);
   max-width: 60%;
   text-align: right;
+}
+.related {
+  padding: var(--space-2) var(--space-4);
+}
+.related__item + .related__item {
+  border-top: 1px solid var(--color-divider);
 }
 .metrics {
   display: grid;

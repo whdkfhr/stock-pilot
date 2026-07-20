@@ -16,7 +16,7 @@ onMounted(() => {
 
 <template>
   <div class="app-shell">
-    <RouterView />
+    <RouterView :key="route.fullPath" />
     <BottomNav v-if="route.meta.tab" />
   </div>
 </template>
