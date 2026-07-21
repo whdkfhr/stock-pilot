@@ -57,8 +57,8 @@ const SESSION_LABEL: Record<MarketSession, string> = {
  * (공휴일은 반영하지 않음 — 시간대 기준 근사)
  */
 export function useMarketStatus() {
-  const krx = ref<MarketState>({ session: 'closed', label: KRX_LABEL.closed })
-  const us = ref<MarketState>({ session: 'closed', label: US_LABEL.closed })
+  const krx = ref<MarketState>({ session: 'closed', label: SESSION_LABEL.closed })
+  const us = ref<MarketState>({ session: 'closed', label: SESSION_LABEL.closed })
 
   function update() {
     const k = classify(
