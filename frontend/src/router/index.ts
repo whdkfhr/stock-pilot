@@ -19,7 +19,7 @@ const router = createRouter({
     {
       path: '/notifications',
       name: 'notifications',
-      component: () => import('@/views/ComingSoonView.vue'),
+      component: () => import('@/views/NotificationsView.vue'),
       meta: { requiresAuth: true, tab: true, title: '알림' },
     },
     {

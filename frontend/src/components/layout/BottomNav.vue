@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
+import { useNotificationStore } from '@/stores/notifications'
 
 const route = useRoute()
+const notifications = useNotificationStore()
 
 const tabs = [
   { name: '홈', icon: '🏠', to: '/' },
@@ -23,7 +25,12 @@ function isActive(to: string) {
       :to="tab.to"
       :class="['tab', { 'tab--active': isActive(tab.to) }]"
     >
-      <span class="tab__icon">{{ tab.icon }}</span>
+      <span class="tab__iconwrap">
+        <span class="tab__icon">{{ tab.icon }}</span>
+        <span v-if="tab.to === '/notifications' && notifications.unreadCount" class="tab__badge">
+          {{ notifications.unreadCount > 9 ? '9+' : notifications.unreadCount }}
+        </span>
+      </span>
       <span class="tab__label">{{ tab.name }}</span>
     </RouterLink>
   </nav>
@@ -52,11 +59,31 @@ function isActive(to: string) {
   gap: 3px;
   color: var(--color-text-tertiary);
 }
+.tab__iconwrap {
+  position: relative;
+  display: inline-flex;
+}
 .tab__icon {
   font-size: 20px;
   filter: grayscale(1);
   opacity: 0.55;
   transition: all 0.15s ease;
+}
+.tab__badge {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .tab__label {
   font-size: 11px;
