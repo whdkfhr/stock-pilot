@@ -43,13 +43,7 @@ function classify(timeZone: string, pre: Range, regular: Range, after: Range): M
 
 const h = (hour: number, min = 0) => hour * 60 + min
 
-const KRX_LABEL: Record<MarketSession, string> = {
-  pre: '장전',
-  regular: '정규장',
-  after: '시간외',
-  closed: '휴장',
-}
-const US_LABEL: Record<MarketSession, string> = {
+const SESSION_LABEL: Record<MarketSession, string> = {
   pre: '프리마켓',
   regular: '정규장',
   after: '애프터마켓',
@@ -57,8 +51,8 @@ const US_LABEL: Record<MarketSession, string> = {
 }
 
 /**
- * 국내장(KRX)·해외장(US)의 세션 상태(장전/정규/시간외/휴장)를 1분마다 갱신.
- * - KRX(KST): 장전 08:30~09:00, 정규 09:00~15:30, 시간외 15:30~18:00
+ * 국내장(KRX)·해외장(US)의 세션 상태(프리마켓/정규장/애프터마켓/휴장)를 1분마다 갱신.
+ * - KRX(KST): 프리 08:30~09:00, 정규 09:00~15:30, 애프터 15:30~18:00
  * - US(ET, DST 자동): 프리 04:00~09:30, 정규 09:30~16:00, 애프터 16:00~20:00
  * (공휴일은 반영하지 않음 — 시간대 기준 근사)
  */
@@ -73,7 +67,7 @@ export function useMarketStatus() {
       { from: h(9), to: h(15, 30) },
       { from: h(15, 30), to: h(18) },
     )
-    krx.value = { session: k, label: KRX_LABEL[k] }
+    krx.value = { session: k, label: SESSION_LABEL[k] }
 
     const u = classify(
       'America/New_York',
@@ -81,7 +75,7 @@ export function useMarketStatus() {
       { from: h(9, 30), to: h(16) },
       { from: h(16), to: h(20) },
     )
-    us.value = { session: u, label: US_LABEL[u] }
+    us.value = { session: u, label: SESSION_LABEL[u] }
   }
 
   let timer: number | undefined
