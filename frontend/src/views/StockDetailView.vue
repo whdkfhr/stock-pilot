@@ -2,7 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { stocksApi } from '@/api/stocks'
+import { alertsApi } from '@/api/notifications'
 import { extractErrorMessage } from '@/api/client'
+import type { AlertDirection } from '@/types'
 import {
   formatPrice,
   formatChange,
@@ -13,6 +15,7 @@ import {
 } from '@/utils/format'
 import type { ChartPoint, QuoteResponse, StockDetail, StockSummary, TradingTrend } from '@/types'
 import BaseCard from '@/components/ui/BaseCard.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
 import CandleChart from '@/components/stock/CandleChart.vue'
 import StockRow from '@/components/stock/StockRow.vue'
 
@@ -28,6 +31,12 @@ const loading = ref(true)
 const error = ref('')
 const busyLike = ref(false)
 const busyWatch = ref(false)
+
+// 가격 알림 설정
+const alertDirection = ref<AlertDirection>('ABOVE')
+const alertThreshold = ref<number | null>(null)
+const alertBusy = ref(false)
+const alertMsg = ref('')
 
 // 차트
 const periods = [
@@ -102,6 +111,7 @@ onMounted(async () => {
   try {
     const [d, ls] = await Promise.all([stocksApi.detail(code), stocksApi.likeStatus(code)])
     detail.value = d.data
+    alertThreshold.value = d.data.price
     liked.value = ls.data.liked
     likeCount.value = ls.data.likeCount
     loadChart()
@@ -138,6 +148,24 @@ async function toggleLike() {
     error.value = extractErrorMessage(e)
   } finally {
     busyLike.value = false
+  }
+}
+
+async function createAlert() {
+  if (alertThreshold.value == null || alertThreshold.value <= 0 || alertBusy.value) return
+  alertBusy.value = true
+  alertMsg.value = ''
+  try {
+    await alertsApi.create({
+      stockCode: code,
+      direction: alertDirection.value,
+      threshold: Math.round(alertThreshold.value),
+    })
+    alertMsg.value = '알림을 설정했어요. 조건 도달 시 알려드릴게요.'
+  } catch (e) {
+    alertMsg.value = extractErrorMessage(e, '알림 설정에 실패했어요')
+  } finally {
+    alertBusy.value = false
   }
 }
 
@@ -294,6 +322,35 @@ async function toggleWatch() {
             <span class="info__k">배당수익률</span><span class="info__v tabular">{{ detail.dividendYield.toFixed(2) }}%</span>
           </li>
         </ul>
+      </BaseCard>
+
+      <!-- 가격 알림 -->
+      <BaseCard>
+        <p class="card-label">🔔 가격 알림</p>
+        <div class="alert-form">
+          <div class="pchips">
+            <button
+              :class="['pchip', { 'pchip--on': alertDirection === 'ABOVE' }]"
+              @click="alertDirection = 'ABOVE'"
+            >
+              이상
+            </button>
+            <button
+              :class="['pchip', { 'pchip--on': alertDirection === 'BELOW' }]"
+              @click="alertDirection = 'BELOW'"
+            >
+              이하
+            </button>
+          </div>
+          <div class="alert-input">
+            <input v-model.number="alertThreshold" type="number" class="alert-input__field tabular" />
+            <span class="alert-input__unit">{{ detail.currency === 'USD' ? '$' : '원' }}</span>
+          </div>
+        </div>
+        <BaseButton size="md" :loading="alertBusy" :disabled="!alertThreshold" @click="createAlert">
+          알림 설정
+        </BaseButton>
+        <p v-if="alertMsg" class="alert-msg">{{ alertMsg }}</p>
       </BaseCard>
 
       <!-- 관련 종목 (같은 시장) -->
@@ -560,6 +617,41 @@ async function toggleWatch() {
   color: var(--color-text-strong);
   max-width: 60%;
   text-align: right;
+}
+.alert-form {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.alert-input {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+  height: 44px;
+}
+.alert-input__field {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-strong);
+  text-align: right;
+}
+.alert-input__unit {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}
+.alert-msg {
+  margin-top: var(--space-3);
+  font-size: 13px;
+  color: var(--color-primary);
 }
 .related {
   padding: var(--space-2) var(--space-4);

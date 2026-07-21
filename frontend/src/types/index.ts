@@ -161,6 +161,39 @@ export interface WatchlistPage {
   totalElements: number
 }
 
+export type AlertDirection = 'ABOVE' | 'BELOW'
+export type AlertStatus = 'ACTIVE' | 'TRIGGERED'
+
+export interface Alert {
+  id: number
+  stockCode: string
+  direction: AlertDirection
+  threshold: number
+  status: AlertStatus
+  createdAt: string
+  triggeredAt: string | null
+}
+
+export interface AlertCreateBody {
+  stockCode: string
+  direction: AlertDirection
+  threshold: number
+}
+
+export interface NotificationItem {
+  id: number
+  stockCode: string
+  message: string
+  price: number
+  read: boolean
+  createdAt: string
+}
+
+export const ALERT_DIRECTION_LABEL: Record<AlertDirection, string> = {
+  ABOVE: '이상',
+  BELOW: '이하',
+}
+
 export const RISK_PROFILE_LABEL: Record<RiskProfile, string> = {
   AGGRESSIVE: '공격형',
   STABLE: '안정형',
