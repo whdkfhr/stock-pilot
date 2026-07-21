@@ -1,5 +1,6 @@
 package com.arok2.stockpilot.price.chart;
 
+import com.arok2.stockpilot.price.YahooHttp;
 import com.arok2.stockpilot.price.quote.QuoteMeta;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,6 +31,7 @@ public class YahooChartClient {
     public YahooChartClient(RestClient.Builder restClientBuilder, ObjectMapper objectMapper) {
         this.restClient = restClientBuilder
                 .baseUrl(BASE_URL)
+                .requestFactory(YahooHttp.timeoutFactory())
                 .defaultHeader("User-Agent", USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;

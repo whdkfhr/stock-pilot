@@ -2,6 +2,7 @@ package com.arok2.stockpilot.price.source;
 
 import com.arok2.stockpilot.domain.MarketType;
 import com.arok2.stockpilot.domain.Stock;
+import com.arok2.stockpilot.price.YahooHttp;
 import com.arok2.stockpilot.price.event.StockPriceEvent;
 import com.arok2.stockpilot.repository.StockRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -41,6 +42,7 @@ public class YahooPriceSource implements PriceSource {
                             StockRepository stockRepository) {
         this.restClient = restClientBuilder
                 .baseUrl(BASE_URL)
+                .requestFactory(YahooHttp.timeoutFactory())
                 .defaultHeader("User-Agent", USER_AGENT)
                 .build();
         this.symbolResolver = new YahooSymbolResolver(properties);
