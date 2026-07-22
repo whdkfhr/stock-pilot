@@ -51,6 +51,11 @@ public class RedisRecommendationCache implements RecommendationCache {
         }
     }
 
+    @Override
+    public void evict(Long userId) {
+        redisTemplate.delete(key(userId));
+    }
+
     private String key(Long userId) {
         return "user:" + userId + ":recommend";
     }

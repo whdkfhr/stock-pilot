@@ -84,6 +84,12 @@ public class User {
         return nickname;
     }
 
+    /** 투자 성향·기간 변경. 추천 결과에 영향을 주므로 호출 측에서 추천 캐시를 무효화한다. */
+    public void updateProfile(RiskProfile riskProfile, InvestmentPeriod investmentPeriod) {
+        this.riskProfile = riskProfile;
+        this.investmentPeriod = investmentPeriod;
+    }
+
     public RiskProfile getRiskProfile() {
         return riskProfile;
     }

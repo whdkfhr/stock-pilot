@@ -25,7 +25,7 @@ const router = createRouter({
     {
       path: '/my',
       name: 'my',
-      component: () => import('@/views/ComingSoonView.vue'),
+      component: () => import('@/views/MyView.vue'),
       meta: { requiresAuth: true, tab: true, title: '마이' },
     },
     {

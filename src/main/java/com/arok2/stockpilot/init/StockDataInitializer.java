@@ -43,7 +43,7 @@ public class StockDataInitializer implements CommandLineRunner {
             new Seed("373220", "LG에너지솔루션", MarketType.KOSPI, 60, 3.5, 6, 0.2),
             new Seed("207940", "삼성바이오로직스", MarketType.KOSPI, 55, 5.5, 12, 0.0),
             new Seed("005380", "현대차", MarketType.KOSPI, 5, 0.6, 12, 4.5),
-            new Seed("000270", "기아", MarketType.KOSPI, 4, 0.8, 18, 5.0),
+            new Seed("000270", "기아", MarketType.KOSPI, 8, 0.9, 13, 4.0),
             new Seed("005490", "POSCO홀딩스", MarketType.KOSPI, 9, 0.5, 6, 3.5),
             new Seed("035420", "NAVER", MarketType.KOSPI, 20, 1.3, 8, 0.5),
             new Seed("035720", "카카오", MarketType.KOSPI, 40, 1.8, 4, 0.1),
@@ -73,8 +73,10 @@ public class StockDataInitializer implements CommandLineRunner {
                         s.per(), s.pbr(), s.roe(), s.dividendYield()));
                 inserted++;
             } else {
-                // 기존 종목의 시장을 보정(멱등 backfill). 값이 같으면 변경 감지가 UPDATE를 생략한다.
-                existing.get().updateMarket(s.market());
+                // 기존 종목의 시장·지표를 시드 기준으로 보정(멱등). 시드가 소스 오브 트루스.
+                Stock stock = existing.get();
+                stock.updateMarket(s.market());
+                stock.updateMetrics(s.per(), s.pbr(), s.roe(), s.dividendYield());
             }
         }
         if (inserted > 0) {
