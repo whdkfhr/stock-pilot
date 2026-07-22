@@ -11,4 +11,7 @@ public interface RecommendationCache {
     RecommendationResponse get(Long userId);
 
     void put(Long userId, RecommendationResponse response);
+
+    /** 캐시 무효화(성향 변경 등으로 재계산이 필요할 때). */
+    void evict(Long userId);
 }

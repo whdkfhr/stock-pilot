@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authApi } from '@/api/auth'
 import { clearToken, getToken, setToken } from '@/api/client'
-import type { LoginRequest, Me, SignupRequest } from '@/types'
+import type { InvestmentPeriod, LoginRequest, Me, RiskProfile, SignupRequest } from '@/types'
 
 export const useAuthStore = defineStore('auth', () => {
   const me = ref<Me | null>(null)
@@ -35,11 +35,16 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function updateProfile(body: { riskProfile: RiskProfile; investmentPeriod: InvestmentPeriod }) {
+    const { data } = await authApi.updateProfile(body)
+    me.value = data
+  }
+
   function logout() {
     clearToken()
     token.value = null
     me.value = null
   }
 
-  return { me, token, loading, isAuthenticated, login, signup, fetchMe, logout }
+  return { me, token, loading, isAuthenticated, login, signup, fetchMe, updateProfile, logout }
 })

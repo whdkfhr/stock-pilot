@@ -1,5 +1,12 @@
 import { api } from './client'
-import type { LoginRequest, LoginResponse, Me, SignupRequest } from '@/types'
+import type {
+  InvestmentPeriod,
+  LoginRequest,
+  LoginResponse,
+  Me,
+  RiskProfile,
+  SignupRequest,
+} from '@/types'
 
 export const authApi = {
   signup(body: SignupRequest) {
@@ -10,5 +17,8 @@ export const authApi = {
   },
   me() {
     return api.get<Me>('/users/me')
+  },
+  updateProfile(body: { riskProfile: RiskProfile; investmentPeriod: InvestmentPeriod }) {
+    return api.patch<Me>('/users/me', body)
   },
 }
