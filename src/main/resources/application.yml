@@ -38,8 +38,13 @@ stockpilot:
     access-token-validity-seconds: ${JWT_ACCESS_TTL:3600}
   kafka:
     stock-price-topic: ${STOCK_PRICE_TOPIC:stock-price}
+  # 한국투자증권(KIS) OpenAPI — 키는 절대 커밋하지 않고 환경변수로만 주입.
+  kis:
+    app-key: ${KIS_APP_KEY:}
+    app-secret: ${KIS_APP_SECRET:}
+    base-url: ${KIS_BASE_URL:https://openapi.koreainvestment.com:9443}
   price:
-    # 시세 소스 선택: yahoo(실 국장 시세, 약 15분 지연·기본) | random(외부 의존 없는 데모용 랜덤워크)
+    # 시세 소스 선택: kis(국장 실시간·미장 야후 하이브리드) | yahoo(전종목 야후·약15분지연·기본) | random(데모용)
     source: ${PRICE_SOURCE:yahoo}
     collector:
       enabled: ${PRICE_COLLECTOR_ENABLED:true}

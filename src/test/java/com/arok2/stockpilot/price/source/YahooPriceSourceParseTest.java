@@ -16,8 +16,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class YahooPriceSourceParseTest {
 
-    private YahooPriceSource newSource() {
-        return new YahooPriceSource(
+    private YahooPriceFetcher newSource() {
+        return new YahooPriceFetcher(
                 RestClient.builder(), new YahooProperties(), new ObjectMapper(),
                 Mockito.mock(StockRepository.class));
     }
