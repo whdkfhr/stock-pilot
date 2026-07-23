@@ -87,14 +87,22 @@ Redis · Kafka · Actuator/Micrometer/Prometheus/Grafana · Testcontainers · Do
 
 | 값 | 소스 | 비고 |
 |----|------|------|
-| `yahoo` (기본) | Yahoo Finance | 국장 `.KS`/`.KQ` 실 시세, 약 15분 지연, 키 불필요 |
+| `kis` | 한국투자증권(하이브리드) | **국장 실시간 무지연**(KIS REST), 미장은 야후. 앱키/OAuth 필요 |
+| `yahoo` (기본) | Yahoo Finance | 국장 `.KS`/`.KQ`, 약 15분 지연, 키 불필요 |
 | `random` | 랜덤워크 목 | 외부 의존 없음(오프라인/CI). 테스트는 항상 이 값 |
-| `kis` *(예정)* | 한국투자증권 | 실시간 체결가(REST+WebSocket), 앱키/OAuth 필요 |
 
 ```bash
 ./gradlew bootRun                    # 기본: 야후 실 시세(.KS 자동 매핑)
 PRICE_SOURCE=random ./gradlew bootRun # 외부 의존 없이 목 시세로
+
+# KIS 실시간(국장). 앱키는 절대 커밋 금지 — 환경변수로만 주입.
+KIS_APP_KEY=... KIS_APP_SECRET=... PRICE_SOURCE=kis ./gradlew bootRun
+# 모의투자: KIS_BASE_URL=https://openapivts.koreainvestment.com:29443
 ```
+
+> KIS는 OAuth 토큰(24h 캐시)으로 국내주식 현재가를 조회한다. 다수 종목 REST 폴링은 초당 제한이
+> 있어 일부 틱을 건너뛸 수 있으나(자가치유), 값은 지연 없이 실시간이다. 진짜 틱 단위 스트리밍은
+> KIS WebSocket(체결가 구독)으로 승격 예정.
 
 ## 로컬 실행
 
