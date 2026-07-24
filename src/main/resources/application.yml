@@ -43,6 +43,9 @@ stockpilot:
     app-key: ${KIS_APP_KEY:}
     app-secret: ${KIS_APP_SECRET:}
     base-url: ${KIS_BASE_URL:https://openapi.koreainvestment.com:9443}
+    # 실시간 체결가 WebSocket(국내). true면 국내는 WS push, REST 폴링은 국내 생략(source=kis와 함께 사용)
+    websocket-enabled: ${KIS_WEBSOCKET_ENABLED:false}
+    ws-url: ${KIS_WS_URL:ws://ops.koreainvestment.com:21000}
   price:
     # 시세 소스 선택: kis(국장 실시간·미장 야후 하이브리드) | yahoo(전종목 야후·약15분지연·기본) | random(데모용)
     source: ${PRICE_SOURCE:yahoo}

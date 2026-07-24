@@ -6,6 +6,7 @@ import com.arok2.stockpilot.repository.StockRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -23,13 +24,17 @@ public class PriceCollectorScheduler {
     private final StockRepository stockRepository;
     private final PriceSource priceSource;
     private final PriceProducer priceProducer;
+    // WebSocket이 국내 실시간을 담당하면 REST 폴링은 국내를 건너뛴다(중복/rate 방지).
+    private final boolean wsHandlesDomestic;
 
     public PriceCollectorScheduler(StockRepository stockRepository,
                                    PriceSource priceSource,
-                                   PriceProducer priceProducer) {
+                                   PriceProducer priceProducer,
+                                   @Value("${stockpilot.kis.websocket-enabled:false}") boolean wsHandlesDomestic) {
         this.stockRepository = stockRepository;
         this.priceSource = priceSource;
         this.priceProducer = priceProducer;
+        this.wsHandlesDomestic = wsHandlesDomestic;
     }
 
     @Scheduled(fixedDelayString = "${stockpilot.price.collector.interval-ms:2000}")
@@ -37,6 +42,9 @@ public class PriceCollectorScheduler {
         var stocks = stockRepository.findAll();
         int published = 0;
         for (var stock : stocks) {
+            if (wsHandlesDomestic && stock.getMarket().isDomestic()) {
+                continue; // 국내는 WebSocket 체결가가 담당
+            }
             try {
                 priceProducer.publish(priceSource.fetch(stock.getCode()));
                 published++;

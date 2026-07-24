@@ -12,6 +12,25 @@ public class KisProperties {
     private String appKey;
     private String appSecret;
     private String baseUrl = "https://openapi.koreainvestment.com:9443";
+    // 실시간 체결가 WebSocket. 실전 ws://ops.koreainvestment.com:21000 / 모의 :31000
+    private String wsUrl = "ws://ops.koreainvestment.com:21000";
+    private boolean websocketEnabled = false;
+
+    public String getWsUrl() {
+        return wsUrl;
+    }
+
+    public void setWsUrl(String wsUrl) {
+        this.wsUrl = wsUrl;
+    }
+
+    public boolean isWebsocketEnabled() {
+        return websocketEnabled;
+    }
+
+    public void setWebsocketEnabled(boolean websocketEnabled) {
+        this.websocketEnabled = websocketEnabled;
+    }
 
     public String getAppKey() {
         return appKey;
