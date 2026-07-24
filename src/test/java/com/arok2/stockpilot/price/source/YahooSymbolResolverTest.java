@@ -1,35 +1,37 @@
 package com.arok2.stockpilot.price.source;
 
+import com.arok2.stockpilot.domain.MarketType;
+
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class YahooSymbolResolverTest {
 
-    @Test
-    void 매핑이_없으면_기본_접미사를_붙인다() {
-        YahooProperties props = new YahooProperties(); // defaultSuffix=.KS
-        YahooSymbolResolver resolver = new YahooSymbolResolver(props);
+    private final YahooSymbolResolver resolver = new YahooSymbolResolver(new YahooProperties());
 
-        assertThat(resolver.resolve("005930")).isEqualTo("005930.KS");
+    @Test
+    void KOSPI는_KS_접미사를_붙인다() {
+        assertThat(resolver.resolve("005930", MarketType.KOSPI)).isEqualTo("005930.KS");
     }
 
     @Test
-    void 명시적_매핑이_있으면_그것을_우선한다() {
-        YahooProperties props = new YahooProperties();
-        props.getSymbols().put("086520", "086520.KQ"); // KOSDAQ
-        YahooSymbolResolver resolver = new YahooSymbolResolver(props);
-
-        assertThat(resolver.resolve("086520")).isEqualTo("086520.KQ");
-        assertThat(resolver.resolve("005930")).isEqualTo("005930.KS"); // 매핑 없는 건 기본 접미사
+    void KOSDAQ는_KQ_접미사를_붙인다() {
+        assertThat(resolver.resolve("247540", MarketType.KOSDAQ)).isEqualTo("247540.KQ");
     }
 
     @Test
-    void 기본_접미사를_KOSDAQ로_바꿀_수_있다() {
-        YahooProperties props = new YahooProperties();
-        props.setDefaultSuffix(".KQ");
-        YahooSymbolResolver resolver = new YahooSymbolResolver(props);
+    void 미국_종목은_접미사가_없다() {
+        assertThat(resolver.resolve("AAPL", MarketType.NASDAQ)).isEqualTo("AAPL");
+        assertThat(resolver.resolve("KO", MarketType.NYSE)).isEqualTo("KO");
+    }
 
-        assertThat(resolver.resolve("086520")).isEqualTo("086520.KQ");
+    @Test
+    void 명시적_override_매핑이_있으면_우선한다() {
+        YahooProperties props = new YahooProperties();
+        props.getSymbols().put("005930", "005930.KS-CUSTOM");
+        YahooSymbolResolver r = new YahooSymbolResolver(props);
+
+        assertThat(r.resolve("005930", MarketType.KOSPI)).isEqualTo("005930.KS-CUSTOM");
     }
 }

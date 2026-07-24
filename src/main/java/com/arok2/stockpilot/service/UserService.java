@@ -1,8 +1,10 @@
 package com.arok2.stockpilot.service;
 
 import com.arok2.stockpilot.domain.User;
+import com.arok2.stockpilot.dto.request.UpdateProfileRequest;
 import com.arok2.stockpilot.dto.response.MeResponse;
 import com.arok2.stockpilot.exception.UserNotFoundException;
+import com.arok2.stockpilot.recommendation.cache.RecommendationCache;
 import com.arok2.stockpilot.repository.UserRepository;
 
 import org.springframework.stereotype.Service;
@@ -12,15 +14,27 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final RecommendationCache recommendationCache;
 
-    public UserService(UserRepository userRepository) {
+    public UserService(UserRepository userRepository, RecommendationCache recommendationCache) {
         this.userRepository = userRepository;
+        this.recommendationCache = recommendationCache;
     }
 
     @Transactional(readOnly = true)
     public MeResponse getMe(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
+        return MeResponse.from(user);
+    }
+
+    /** 투자 성향·기간 변경. 추천이 성향에 의존하므로 추천 캐시를 무효화한다. */
+    @Transactional
+    public MeResponse updateProfile(Long userId, UpdateProfileRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
+        user.updateProfile(request.riskProfile(), request.investmentPeriod());
+        recommendationCache.evict(userId);
         return MeResponse.from(user);
     }
 }

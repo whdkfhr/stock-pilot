@@ -1,5 +1,6 @@
 package com.arok2.stockpilot.price.producer;
 
+import com.arok2.stockpilot.price.source.KisRateLimitException;
 import com.arok2.stockpilot.price.source.PriceSource;
 import com.arok2.stockpilot.repository.StockRepository;
 
@@ -39,8 +40,11 @@ public class PriceCollectorScheduler {
             try {
                 priceProducer.publish(priceSource.fetch(stock.getCode()));
                 published++;
+            } catch (KisRateLimitException e) {
+                // KIS 초당 제한 스킵 — 다음 주기에 갱신되는 정상 상황이라 조용히 처리.
+                log.debug("시세 수집 스킵(rate) {}", stock.getCode());
             } catch (Exception e) {
-                // 외부 시세 API(예: Yahoo)의 일시 오류가 한 종목 때문에 전체 수집을 막지 않도록 격리한다.
+                // 외부 시세 API의 일시 오류가 한 종목 때문에 전체 수집을 막지 않도록 격리한다.
                 log.warn("시세 수집 실패 {}: {}", stock.getCode(), e.getMessage());
             }
         }
