@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import { formatPrice, formatChange, formatPercent, directionFromChange } from '@/utils/format'
 
 const props = defineProps<{
@@ -15,6 +16,19 @@ const props = defineProps<{
 defineEmits<{ (e: 'click'): void }>()
 
 const dir = () => directionFromChange(props.change)
+
+// 시세가 갱신되는 순간 방향에 따라 깜빡임(상승 빨강/하락 파랑)
+const flash = ref('')
+watch(
+  () => props.price,
+  (n, o) => {
+    if (o == null || n == null || n === o) return
+    flash.value = n > o ? 'flash-up' : 'flash-down'
+    window.setTimeout(() => {
+      flash.value = ''
+    }, 700)
+  },
+)
 </script>
 
 <template>
@@ -27,7 +41,7 @@ const dir = () => directionFromChange(props.change)
         <span v-if="meta" class="row__meta">· {{ meta }}</span>
       </span>
     </span>
-    <span class="row__pricebox">
+    <span :class="['row__pricebox', flash]">
       <span class="row__price tabular">{{ formatPrice(price, currency) }}</span>
       <span v-if="change != null" :class="['row__change', 'tabular', `dir-${dir()}`]">
         {{ formatChange(change, currency) }} ({{ formatPercent(changePercent) }})
@@ -86,6 +100,31 @@ const dir = () => directionFromChange(props.change)
   align-items: flex-end;
   gap: 2px;
   flex-shrink: 0;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  border-radius: var(--radius-sm);
+}
+.flash-up {
+  animation: flash-up 0.7s ease-out;
+}
+.flash-down {
+  animation: flash-down 0.7s ease-out;
+}
+@keyframes flash-up {
+  0% {
+    background: color-mix(in srgb, var(--color-up) 22%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+@keyframes flash-down {
+  0% {
+    background: color-mix(in srgb, var(--color-down) 22%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
 }
 .row__price {
   font-size: 15px;

@@ -1,30 +1,29 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { stocksApi } from '@/api/stocks'
-import { directionOf, type Direction } from '@/utils/format'
 import type { StockSummary } from '@/types'
 
+interface PriceTick {
+  code: string
+  price: number
+  change: number | null
+  changePercent: number | null
+}
+
 /**
- * 전체 종목 시세를 주기적으로 폴링하며, 직전 값 대비 등락 방향을 추적한다.
- * (실시간 체감을 위한 클라이언트 폴링 — 백엔드 Kafka 파이프라인이 최신가를 갱신한다.)
+ * 전체 종목 시세를 초기 로드한 뒤, SSE(/api/stocks/stream)로 실시간 틱을 받아 갱신한다.
+ * 브라우저 폴링 대신 서버 push라 즉시 반영된다. (30초 안전망 폴링 유지)
  */
-export function useLiveStocks(intervalMs = 4000) {
+export function useLiveStocks() {
   const stocks = ref<StockSummary[]>([])
-  const directions = ref<Record<string, Direction>>({})
   const loading = ref(true)
   const error = ref('')
-  let timer: number | undefined
+  let es: EventSource | null = null
+  let poll: number | undefined
 
   async function refresh() {
     try {
       const { data } = await stocksApi.list()
-      const prevByCode = new Map(stocks.value.map((s) => [s.code, s.price]))
-      const nextDir: Record<string, Direction> = { ...directions.value }
-      for (const s of data) {
-        const dir = directionOf(prevByCode.get(s.code) ?? null, s.price)
-        if (dir !== 'flat') nextDir[s.code] = dir
-      }
       stocks.value = data
-      directions.value = nextDir
       error.value = ''
     } catch {
       error.value = '시세를 불러오지 못했어요'
@@ -33,13 +32,33 @@ export function useLiveStocks(intervalMs = 4000) {
     }
   }
 
+  function applyTick(tick: PriceTick) {
+    const s = stocks.value.find((x) => x.code === tick.code)
+    if (s) {
+      s.price = tick.price
+      s.change = tick.change
+      s.changePercent = tick.changePercent
+    }
+  }
+
   onMounted(() => {
     refresh()
-    timer = window.setInterval(refresh, intervalMs)
-  })
-  onUnmounted(() => {
-    if (timer) window.clearInterval(timer)
+    es = new EventSource('/api/stocks/stream')
+    es.addEventListener('price', (e) => {
+      try {
+        applyTick(JSON.parse((e as MessageEvent).data))
+      } catch {
+        /* ignore malformed */
+      }
+    })
+    // 연결이 끊기면 EventSource가 자동 재연결한다.
+    poll = window.setInterval(refresh, 30_000) // 안전망(틱 유실 대비 재동기화)
   })
 
-  return { stocks, directions, loading, error, refresh }
+  onUnmounted(() => {
+    es?.close()
+    if (poll) window.clearInterval(poll)
+  })
+
+  return { stocks, loading, error, refresh }
 }
