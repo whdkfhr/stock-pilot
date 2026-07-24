@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { stocksApi } from '@/api/stocks'
 import { alertsApi } from '@/api/notifications'
+import { usePriceStream } from '@/composables/usePriceStream'
 import { extractErrorMessage } from '@/api/client'
 import type { AlertDirection } from '@/types'
 import {
@@ -18,6 +19,7 @@ import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import CandleChart from '@/components/stock/CandleChart.vue'
 import StockRow from '@/components/stock/StockRow.vue'
+import RollingNumber from '@/components/stock/RollingNumber.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -86,6 +88,15 @@ const metrics = computed(() => {
     { label: 'ROE', value: `${d.roe.toFixed(1)}%` },
     { label: '배당률', value: `${d.dividendYield.toFixed(1)}%` },
   ]
+})
+
+// 상세 화면도 실시간 반영: 이 종목 틱이 오면 현재가/등락 갱신 → 대표가격 롤링
+usePriceStream((tick) => {
+  if (tick.code === code && detail.value) {
+    detail.value.price = tick.price
+    detail.value.change = tick.change
+    detail.value.changePercent = tick.changePercent
+  }
 })
 
 async function loadChart() {
@@ -206,7 +217,9 @@ async function toggleWatch() {
       <!-- 현재가 -->
       <section class="price-block">
         <p class="price-block__code">{{ detail.code }} · {{ detail.market }}</p>
-        <h1 class="price-block__price tabular">{{ formatPrice(detail.price, detail.currency) }}</h1>
+        <h1 class="price-block__price">
+          <RollingNumber :value="detail.price" :currency="detail.currency" />
+        </h1>
         <p v-if="detail.change != null" :class="['price-block__change', `dir-${changeDir}`]">
           <span>{{ detail.change > 0 ? '▲' : detail.change < 0 ? '▼' : '' }}</span>
           <span class="tabular">{{ formatChange(detail.change, detail.currency).replace(/^[+-]/, '') }}</span>
