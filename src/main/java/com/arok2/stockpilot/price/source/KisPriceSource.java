@@ -1,10 +1,10 @@
 package com.arok2.stockpilot.price.source;
 
-import com.arok2.stockpilot.domain.MarketType;
-import com.arok2.stockpilot.domain.Stock;
+import com.arok2.stockpilot.stock.domain.MarketType;
+import com.arok2.stockpilot.stock.domain.Stock;
 import com.arok2.stockpilot.price.YahooHttp;
 import com.arok2.stockpilot.price.event.StockPriceEvent;
-import com.arok2.stockpilot.repository.StockRepository;
+import com.arok2.stockpilot.stock.repository.StockRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

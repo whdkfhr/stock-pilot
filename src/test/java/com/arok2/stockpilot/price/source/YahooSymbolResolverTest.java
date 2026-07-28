@@ -1,6 +1,6 @@
 package com.arok2.stockpilot.price.source;
 
-import com.arok2.stockpilot.domain.MarketType;
+import com.arok2.stockpilot.stock.domain.MarketType;
 
 import org.junit.jupiter.api.Test;
 

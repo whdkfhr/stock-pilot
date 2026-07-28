@@ -1,8 +1,8 @@
 package com.arok2.stockpilot.trading;
 
-import com.arok2.stockpilot.domain.Stock;
+import com.arok2.stockpilot.stock.domain.Stock;
 import com.arok2.stockpilot.exception.StockNotFoundException;
-import com.arok2.stockpilot.repository.StockRepository;
+import com.arok2.stockpilot.stock.repository.StockRepository;
 import com.arok2.stockpilot.trading.TradingTrendResponse.InvestorFlow;
 
 import org.springframework.stereotype.Service;

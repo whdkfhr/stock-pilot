@@ -1,10 +1,10 @@
 package com.arok2.stockpilot.price.chart;
 
-import com.arok2.stockpilot.domain.Stock;
+import com.arok2.stockpilot.stock.domain.Stock;
 import com.arok2.stockpilot.exception.StockNotFoundException;
 import com.arok2.stockpilot.price.source.YahooProperties;
 import com.arok2.stockpilot.price.source.YahooSymbolResolver;
-import com.arok2.stockpilot.repository.StockRepository;
+import com.arok2.stockpilot.stock.repository.StockRepository;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

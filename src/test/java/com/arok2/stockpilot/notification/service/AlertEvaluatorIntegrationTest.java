@@ -1,6 +1,6 @@
 package com.arok2.stockpilot.notification.service;
 
-import com.arok2.stockpilot.domain.Stock;
+import com.arok2.stockpilot.stock.domain.Stock;
 import com.arok2.stockpilot.notification.domain.AlertCondition;
 import com.arok2.stockpilot.notification.domain.AlertDirection;
 import com.arok2.stockpilot.notification.domain.AlertStatus;
@@ -8,7 +8,7 @@ import com.arok2.stockpilot.notification.domain.Notification;
 import com.arok2.stockpilot.notification.repository.AlertConditionRepository;
 import com.arok2.stockpilot.notification.repository.NotificationRepository;
 import com.arok2.stockpilot.price.event.StockPriceEvent;
-import com.arok2.stockpilot.repository.StockRepository;
+import com.arok2.stockpilot.stock.repository.StockRepository;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

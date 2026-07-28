@@ -1,6 +1,6 @@
 package com.arok2.stockpilot.like;
 
-import com.arok2.stockpilot.repository.StockRepository;
+import com.arok2.stockpilot.stock.repository.StockRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
