@@ -2,9 +2,7 @@ package com.arok2.stockpilot.watchlist.service;
 
 import com.arok2.stockpilot.stock.domain.Stock;
 import com.arok2.stockpilot.watchlist.domain.Watchlist;
-import com.arok2.stockpilot.watchlist.dto.WatchlistCreateResponse;
-import com.arok2.stockpilot.watchlist.dto.WatchlistDeleteResponse;
-import com.arok2.stockpilot.watchlist.dto.WatchlistPageResponse;
+import com.arok2.stockpilot.watchlist.service.result.WatchedStock;
 import com.arok2.stockpilot.exception.StockNotFoundException;
 import com.arok2.stockpilot.exception.WatchlistAlreadyExistsException;
 import com.arok2.stockpilot.exception.WatchlistNotFoundException;
@@ -22,6 +20,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -62,11 +61,11 @@ class WatchlistServiceTest {
         setId(saved, 1001L);
         when(watchlistRepository.save(any(Watchlist.class))).thenReturn(saved);
 
-        WatchlistCreateResponse response = watchlistService.register(userId, stockId);
+        Watchlist created = watchlistService.register(userId, stockId);
 
-        assertThat(response.watchlistId()).isEqualTo(1001L);
-        assertThat(response.stockId()).isEqualTo(stockId);
-        assertThat(response.userId()).isEqualTo(userId);
+        assertThat(created.getId()).isEqualTo(1001L);
+        assertThat(created.getStockId()).isEqualTo(stockId);
+        assertThat(created.getUserId()).isEqualTo(userId);
 
         verify(stockRepository, times(1)).incrementWatchCount(stockId);
     }
@@ -125,9 +124,9 @@ class WatchlistServiceTest {
 
         when(watchlistRepository.findByUserIdAndStockId(userId, stockId)).thenReturn(Optional.of(existing));
 
-        WatchlistDeleteResponse response = watchlistService.unwatch(userId, stockId);
+        Instant unwatchedAt = watchlistService.unwatch(userId, stockId);
 
-        assertThat(response.stockId()).isEqualTo(stockId);
+        assertThat(unwatchedAt).isNotNull();
         verify(watchlistRepository, times(1)).deleteByUserIdAndStockId(userId, stockId);
         verify(stockRepository, times(1)).decrementWatchCount(stockId);
     }
@@ -158,12 +157,12 @@ class WatchlistServiceTest {
         when(watchlistRepository.findByUserId(userId, pageable)).thenReturn(page);
         when(stockRepository.findAllById(List.of(42L))).thenReturn(List.of(stock));
 
-        WatchlistPageResponse response = watchlistService.getMyWatchlist(userId, pageable);
+        Page<WatchedStock> result = watchlistService.getMyWatchlist(userId, pageable);
 
-        assertThat(response.content()).hasSize(1);
-        assertThat(response.content().get(0).stockId()).isEqualTo(42L);
-        assertThat(response.content().get(0).stockCode()).isEqualTo("005930");
-        assertThat(response.totalElements()).isEqualTo(1);
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).stockId()).isEqualTo(42L);
+        assertThat(result.getContent().get(0).stockCode()).isEqualTo("005930");
+        assertThat(result.getTotalElements()).isEqualTo(1);
 
         // 배치 조회이므로 stockId당 findById가 아닌 findAllById 1회만 호출되어야 한다 (N+1 회피 검증)
         verify(stockRepository, times(1)).findAllById(anyList());

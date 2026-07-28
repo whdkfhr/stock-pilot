@@ -1,5 +1,6 @@
 package com.arok2.stockpilot.auth.dto.request;
 
+import com.arok2.stockpilot.auth.service.command.SignupCommand;
 import com.arok2.stockpilot.user.domain.InvestmentPeriod;
 import com.arok2.stockpilot.user.domain.RiskProfile;
 
@@ -28,4 +29,8 @@ public record SignupRequest(
         @NotNull(message = "투자 기간은 필수입니다")
         InvestmentPeriod investmentPeriod
 ) {
+
+    public SignupCommand toCommand() {
+        return new SignupCommand(email, password, nickname, riskProfile, investmentPeriod);
+    }
 }

@@ -4,9 +4,8 @@ import com.arok2.stockpilot.user.domain.InvestmentPeriod;
 import com.arok2.stockpilot.user.domain.RiskProfile;
 import com.arok2.stockpilot.user.domain.User;
 import com.arok2.stockpilot.auth.dto.request.LoginRequest;
+import com.arok2.stockpilot.auth.service.result.IssuedToken;
 import com.arok2.stockpilot.auth.dto.request.SignupRequest;
-import com.arok2.stockpilot.auth.dto.response.LoginResponse;
-import com.arok2.stockpilot.auth.dto.response.SignupResponse;
 import com.arok2.stockpilot.exception.DuplicateEmailException;
 import com.arok2.stockpilot.exception.InvalidCredentialsException;
 import com.arok2.stockpilot.user.repository.UserRepository;
@@ -84,12 +83,12 @@ class AuthServiceTest {
         given(userRepository.saveAndFlush(any(User.class))).willReturn(savedUser);
 
         // when
-        SignupResponse response = authService.signup(request);
+        User created = authService.signup(request.toCommand());
 
         // then
-        assertThat(response.id()).isEqualTo(1L);
-        assertThat(response.email()).isEqualTo(request.email());
-        assertThat(response.nickname()).isEqualTo(request.nickname());
+        assertThat(created.getId()).isEqualTo(1L);
+        assertThat(created.getEmail()).isEqualTo(request.email());
+        assertThat(created.getNickname()).isEqualTo(request.nickname());
     }
 
     @Test
@@ -104,7 +103,7 @@ class AuthServiceTest {
                 .willAnswer(invocation -> invocation.getArgument(0));
 
         // when
-        authService.signup(request);
+        authService.signup(request.toCommand());
 
         // then
         User captured = userCaptor.getValue();
@@ -119,7 +118,7 @@ class AuthServiceTest {
         given(userRepository.existsByEmail(request.email())).willReturn(true);
 
         // when & then
-        assertThatThrownBy(() -> authService.signup(request))
+        assertThatThrownBy(() -> authService.signup(request.toCommand()))
                 .isInstanceOf(DuplicateEmailException.class);
 
         verify(userRepository, never()).saveAndFlush(any(User.class));
@@ -135,7 +134,7 @@ class AuthServiceTest {
                 .willThrow(new DataIntegrityViolationException("unique constraint violation"));
 
         // when & then
-        assertThatThrownBy(() -> authService.signup(request))
+        assertThatThrownBy(() -> authService.signup(request.toCommand()))
                 .isInstanceOf(DuplicateEmailException.class);
     }
 
@@ -150,12 +149,11 @@ class AuthServiceTest {
         given(jwtTokenProvider.getValiditySeconds()).willReturn(3600L);
 
         // when
-        LoginResponse response = authService.login(request);
+        IssuedToken issued = authService.login(request.toCommand());
 
-        // then
-        assertThat(response.accessToken()).isEqualTo("jwt-token");
-        assertThat(response.tokenType()).isEqualTo("Bearer");
-        assertThat(response.expiresIn()).isEqualTo(3600L);
+        // then: tokenType("Bearer") 같은 표현 형식은 API 계약 테스트가 검증한다.
+        assertThat(issued.accessToken()).isEqualTo("jwt-token");
+        assertThat(issued.expiresInSeconds()).isEqualTo(3600L);
     }
 
     @Test
@@ -165,7 +163,7 @@ class AuthServiceTest {
         given(userRepository.findByEmail(request.email())).willReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> authService.login(request))
+        assertThatThrownBy(() -> authService.login(request.toCommand()))
                 .isInstanceOf(InvalidCredentialsException.class);
         verify(jwtTokenProvider, never()).createAccessToken(anyLong(), anyString());
     }
@@ -179,7 +177,7 @@ class AuthServiceTest {
         given(passwordEncoder.matches("wrong-password", "hashed-password")).willReturn(false);
 
         // when & then
-        assertThatThrownBy(() -> authService.login(request))
+        assertThatThrownBy(() -> authService.login(request.toCommand()))
                 .isInstanceOf(InvalidCredentialsException.class);
         verify(jwtTokenProvider, never()).createAccessToken(anyLong(), anyString());
     }
