@@ -2,7 +2,7 @@ package com.arok2.stockpilot.auth.service;
 
 import com.arok2.stockpilot.user.domain.InvestmentPeriod;
 import com.arok2.stockpilot.user.domain.RiskProfile;
-import com.arok2.stockpilot.auth.dto.request.SignupRequest;
+import com.arok2.stockpilot.auth.service.command.SignupCommand;
 import com.arok2.stockpilot.exception.DuplicateEmailException;
 import com.arok2.stockpilot.user.repository.UserRepository;
 
@@ -82,7 +82,7 @@ class AuthServiceConcurrencyIntegrationTest {
                     readyLatch.countDown();
                     startLatch.await();
                     try {
-                        authService.signup(new SignupRequest(
+                        authService.signup(new SignupCommand(
                                 email,
                                 "password123",
                                 "nickname" + i,

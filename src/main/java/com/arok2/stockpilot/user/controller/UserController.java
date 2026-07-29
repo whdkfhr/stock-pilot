@@ -2,6 +2,7 @@ package com.arok2.stockpilot.user.controller;
 
 import com.arok2.stockpilot.user.dto.request.UpdateProfileRequest;
 import com.arok2.stockpilot.user.dto.response.MeResponse;
+import com.arok2.stockpilot.user.domain.User;
 import com.arok2.stockpilot.user.service.UserService;
 
 import jakarta.validation.Valid;
@@ -27,7 +28,7 @@ public class UserController {
     /** JWT로 인증된 현재 사용자 정보를 반환한다. principal은 사용자 식별자(Long). */
     @GetMapping("/me")
     public ResponseEntity<MeResponse> me(@AuthenticationPrincipal Long userId) {
-        return ResponseEntity.ok(userService.getMe(userId));
+        return ResponseEntity.ok(MeResponse.from(userService.getMe(userId)));
     }
 
     /** 투자 성향·기간을 변경한다(추천 캐시 무효화). */
@@ -35,6 +36,7 @@ public class UserController {
     public ResponseEntity<MeResponse> updateProfile(
             @AuthenticationPrincipal Long userId,
             @Valid @RequestBody UpdateProfileRequest request) {
-        return ResponseEntity.ok(userService.updateProfile(userId, request));
+        User updated = userService.updateProfile(request.toCommand(userId));
+        return ResponseEntity.ok(MeResponse.from(updated));
     }
 }

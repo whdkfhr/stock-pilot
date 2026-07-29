@@ -1,5 +1,7 @@
 package com.arok2.stockpilot.user.dto.request;
 
+import com.arok2.stockpilot.user.service.command.UpdateProfileCommand;
+
 import com.arok2.stockpilot.user.domain.InvestmentPeriod;
 import com.arok2.stockpilot.user.domain.RiskProfile;
 
@@ -13,4 +15,8 @@ public record UpdateProfileRequest(
         @NotNull(message = "투자 기간은 필수입니다")
         InvestmentPeriod investmentPeriod
 ) {
+
+    public UpdateProfileCommand toCommand(Long userId) {
+        return new UpdateProfileCommand(userId, riskProfile, investmentPeriod);
+    }
 }

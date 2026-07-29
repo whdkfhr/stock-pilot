@@ -4,7 +4,6 @@ import com.arok2.stockpilot.user.domain.InvestmentPeriod;
 import com.arok2.stockpilot.user.domain.RiskProfile;
 import com.arok2.stockpilot.user.domain.User;
 import com.arok2.stockpilot.auth.dto.request.SignupRequest;
-import com.arok2.stockpilot.auth.dto.response.SignupResponse;
 import com.arok2.stockpilot.user.repository.UserRepository;
 
 import org.junit.jupiter.api.AfterEach;
@@ -59,10 +58,10 @@ class AuthServicePasswordEncodingIntegrationTest {
         );
 
         // when
-        SignupResponse response = authService.signup(request);
+        User created = authService.signup(request.toCommand());
 
         // then: DB에서 직접 조회하여 검증
-        Optional<User> saved = userRepository.findById(response.id());
+        Optional<User> saved = userRepository.findById(created.getId());
         assertThat(saved).isPresent();
 
         String storedHash = saved.get().getPasswordHash();

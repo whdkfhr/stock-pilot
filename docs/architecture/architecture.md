@@ -65,6 +65,24 @@ com.arok2.stockpilot
 - DTO: API 계약 전용. 도메인 엔티티를 API 응답으로 직접 노출하지 않는다.
 - 의존성 주입: 생성자 주입만 사용 (`@Autowired` 필드 주입 금지).
 
+### 4.1 Command / Result 규칙
+
+**커맨드(쓰기·인증) 유스케이스**는 API DTO를 받지도 반환하지도 않는다. HTTP 계약이 바뀌어도
+비즈니스 로직이 흔들리지 않게 하기 위함이다.
+
+```
+Controller ──(Request DTO.toCommand())──▶ Service(Command)
+Controller ◀──(도메인 or Result record)── Service
+     └─ Response DTO 변환은 Controller의 책임
+```
+
+- 입력: `{domain}/service/command/*Command` (예: `SignupCommand`, `UpdateProfileCommand`)
+- 출력: 도메인 객체(`User`, `Watchlist`) 또는 `{domain}/service/result/*`
+  (예: `IssuedToken`, `WatchedStock`) — 표현 형식(`tokenType: "Bearer"` 등)은 담지 않는다.
+
+**조회(Query) 전용 서비스는 예외**로 읽기 모델을 그대로 반환한다(`StockQueryService`).
+질의 결과 자체가 곧 뷰이므로 1:1 복제 레코드를 덧대면 이득 없이 계층만 늘어난다(CQRS의 조회 측).
+
 ## 5. 동시성 전략
 
 | 대상 | 전략 |

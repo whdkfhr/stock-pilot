@@ -1,16 +1,14 @@
 package com.arok2.stockpilot.watchlist.service;
 
-import com.arok2.stockpilot.stock.domain.Stock;
-import com.arok2.stockpilot.watchlist.domain.Watchlist;
-import com.arok2.stockpilot.watchlist.dto.WatchlistCreateResponse;
-import com.arok2.stockpilot.watchlist.dto.WatchlistDeleteResponse;
-import com.arok2.stockpilot.watchlist.dto.WatchlistItemResponse;
-import com.arok2.stockpilot.watchlist.dto.WatchlistPageResponse;
 import com.arok2.stockpilot.exception.StockNotFoundException;
 import com.arok2.stockpilot.exception.WatchlistAlreadyExistsException;
 import com.arok2.stockpilot.exception.WatchlistNotFoundException;
+import com.arok2.stockpilot.stock.domain.Stock;
 import com.arok2.stockpilot.stock.repository.StockRepository;
+import com.arok2.stockpilot.watchlist.domain.Watchlist;
 import com.arok2.stockpilot.watchlist.repository.WatchlistRepository;
+import com.arok2.stockpilot.watchlist.service.result.WatchedStock;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,6 +21,9 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * 관심종목 유스케이스. 도메인/결과 모델을 반환하고 API 표현은 Controller가 담당한다.
+ */
 @Service
 public class WatchlistService {
 
@@ -35,7 +36,7 @@ public class WatchlistService {
     }
 
     @Transactional
-    public WatchlistCreateResponse register(Long userId, Long stockId) {
+    public Watchlist register(Long userId, Long stockId) {
         stockRepository.findById(stockId)
                 .orElseThrow(() -> new StockNotFoundException(stockId));
 
@@ -52,27 +53,23 @@ public class WatchlistService {
 
         stockRepository.incrementWatchCount(stockId);
 
-        return new WatchlistCreateResponse(
-                saved.getId(),
-                saved.getStockId(),
-                saved.getUserId(),
-                saved.getCreatedAt()
-        );
+        return saved;
     }
 
+    /** 관심종목을 해제하고 해제 시각을 돌려준다. */
     @Transactional
-    public WatchlistDeleteResponse unwatch(Long userId, Long stockId) {
-        Watchlist watchlist = watchlistRepository.findByUserIdAndStockId(userId, stockId)
+    public Instant unwatch(Long userId, Long stockId) {
+        watchlistRepository.findByUserIdAndStockId(userId, stockId)
                 .orElseThrow(() -> new WatchlistNotFoundException(userId, stockId));
 
         watchlistRepository.deleteByUserIdAndStockId(userId, stockId);
         stockRepository.decrementWatchCount(stockId);
 
-        return new WatchlistDeleteResponse(watchlist.getStockId(), Instant.now());
+        return Instant.now();
     }
 
     @Transactional(readOnly = true)
-    public WatchlistPageResponse getMyWatchlist(Long userId, Pageable pageable) {
+    public Page<WatchedStock> getMyWatchlist(Long userId, Pageable pageable) {
         Page<Watchlist> watchlistPage = watchlistRepository.findByUserId(userId, pageable);
 
         List<Long> stockIds = watchlistPage.getContent().stream()
@@ -85,24 +82,15 @@ public class WatchlistService {
         Map<Long, Stock> stockById = stockRepository.findAllById(stockIds).stream()
                 .collect(Collectors.toMap(Stock::getId, Function.identity()));
 
-        List<WatchlistItemResponse> content = watchlistPage.getContent().stream()
-                .map(w -> toItemResponse(w, stockById.get(w.getStockId())))
-                .toList();
-
-        return new WatchlistPageResponse(
-                content,
-                watchlistPage.getNumber(),
-                watchlistPage.getSize(),
-                watchlistPage.getTotalElements()
-        );
+        return watchlistPage.map(w -> toWatchedStock(w, stockById.get(w.getStockId())));
     }
 
-    private WatchlistItemResponse toItemResponse(Watchlist watchlist, Stock stock) {
+    private WatchedStock toWatchedStock(Watchlist watchlist, Stock stock) {
         if (stock == null) {
             throw new StockNotFoundException(watchlist.getStockId());
         }
 
-        return new WatchlistItemResponse(
+        return new WatchedStock(
                 watchlist.getId(),
                 stock.getId(),
                 stock.getCode(),

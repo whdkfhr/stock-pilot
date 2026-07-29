@@ -5,6 +5,8 @@ import com.arok2.stockpilot.auth.dto.request.SignupRequest;
 import com.arok2.stockpilot.auth.dto.response.LoginResponse;
 import com.arok2.stockpilot.auth.dto.response.SignupResponse;
 import com.arok2.stockpilot.auth.service.AuthService;
+import com.arok2.stockpilot.auth.service.result.IssuedToken;
+import com.arok2.stockpilot.user.domain.User;
 
 import jakarta.validation.Valid;
 
@@ -27,12 +29,13 @@ public class AuthController {
 
     @PostMapping("/signup")
     public ResponseEntity<SignupResponse> signup(@Valid @RequestBody SignupRequest request) {
-        SignupResponse response = authService.signup(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        User created = authService.signup(request.toCommand());
+        return ResponseEntity.status(HttpStatus.CREATED).body(SignupResponse.from(created));
     }
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+        IssuedToken token = authService.login(request.toCommand());
+        return ResponseEntity.ok(LoginResponse.of(token.accessToken(), token.expiresInSeconds()));
     }
 }
