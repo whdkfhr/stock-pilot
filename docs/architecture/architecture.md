@@ -121,3 +121,18 @@ Controller ◀──(도메인 or Result record)── Service
 
 - `/actuator/prometheus`로 메트릭 노출.
 - 도메인 핵심 지표는 Micrometer 커스텀 메트릭으로 계측.
+
+## 10. 테스트 전략
+
+기본은 **인프라 없이 도는 빠른 테스트**, 예외적으로 **운영과 같은 엔진**을 쓴다.
+
+| 층 | 환경 | 담당 |
+|----|------|------|
+| 단위 | 순수 JUnit/Mockito | 도메인 규칙(등락 계산·성향 가중치·관심등록), 파싱(KIS/야후 실측 응답) |
+| 통합(기본) | H2 + `@EmbeddedKafka` + Redis Mock | API 계약, 서비스 흐름, 로직 회귀 |
+| 통합(운영 DB) | **Testcontainers PostgreSQL** | **동시성** — 갱신 손실·유니크 제약처럼 DB 엔진의 락/격리에 결과가 좌우되는 검증 |
+
+- `./gradlew test`는 로컬 인프라 없이 통과해야 한다. Testcontainers 테스트는
+  `@Testcontainers(disabledWithoutDocker = true)`로 **Docker가 없으면 자동 skip**된다.
+- PostgreSQL 컨테이너는 클래스마다 띄우지 않고 **싱글턴으로 공유**한다(`PostgresIntegrationTest`).
+- 동시성은 **H2(빠른 회귀) + PostgreSQL(운영 근거)** 두 층을 함께 유지한다.
