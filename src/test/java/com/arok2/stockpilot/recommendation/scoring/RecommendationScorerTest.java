@@ -1,7 +1,7 @@
 package com.arok2.stockpilot.recommendation.scoring;
 
-import com.arok2.stockpilot.domain.RiskProfile;
-import com.arok2.stockpilot.domain.Stock;
+import com.arok2.stockpilot.user.domain.RiskProfile;
+import com.arok2.stockpilot.stock.domain.Stock;
 
 import org.junit.jupiter.api.Test;
 

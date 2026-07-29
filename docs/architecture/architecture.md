@@ -29,15 +29,21 @@ Architect 에이전트는 개별 DESIGN을 작성할 때 이 문서와의 일관
 
 ```
 com.arok2.stockpilot
- ├── auth/              # 인증/인가 (JWT, Security)
+ ├── auth/             # 인증/인가 (로그인·회원가입)
  ├── user/             # 사용자, 투자 성향
- ├── stock/            # 종목 마스터
+ ├── stock/            # 종목 마스터·조회
  ├── watchlist/        # 관심종목 (동시성)
- ├── price/            # 실시간 시세 (Kafka producer/consumer)
- ├── recommendation/   # 추천 엔진
+ ├── price/            # 실시간 시세 (source/producer/consumer/stream/chart/quote)
+ ├── recommendation/   # 추천 엔진 (scoring, cache)
  ├── ranking/          # 인기 랭킹 (Redis ZSET)
- ├── notification/     # 가격 알림
- └── common/           # 공통 (config, exception, response)
+ ├── notification/     # 가격 알림 (조건·발화)
+ ├── like/             # 좋아요 (Redis Set)
+ ├── trading/          # 투자자 매매동향
+ ├── security/         # JWT 필터·인증 컨텍스트
+ ├── config/           # 스프링 설정
+ ├── exception/        # 글로벌 예외 처리
+ ├── observability/    # 메트릭
+ └── common/           # 공통 응답(dto) 등
 ```
 
 각 도메인 패키지 내부는 다음 하위 구조를 따른다:
@@ -63,9 +69,13 @@ com.arok2.stockpilot
 
 | 대상 | 전략 |
 |------|------|
-| 관심종목 watch_count | JPA 낙관적 락(`@Version`) |
+| 관심종목 watch_count | **DB 원자적 UPDATE**(`SET watch_count = watch_count + 1`) |
 | 좋아요 / 조회수 | Redis Atomic(INCR) → 주기적 배치 DB Sync |
 | 시세 순차 처리 | Kafka 파티션 키(종목코드) 기반 순서 보장 |
+
+> **watch_count에 낙관적 락(`@Version`)을 쓰지 않는 이유**: 관심등록은 경합이 잦은 단순 카운터
+> 증감이라 `@Version`은 충돌 시 재시도 비용만 늘어난다. 단일 원자적 UPDATE로 DB가 직렬화하게
+> 맡기는 편이 갱신 손실 0을 더 단순하게 보장한다(동시성 통합테스트로 검증).
 
 ## 6. Kafka 토픽 (기준)
 
