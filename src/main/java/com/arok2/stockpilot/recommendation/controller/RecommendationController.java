@@ -24,6 +24,6 @@ public class RecommendationController {
 
     @GetMapping
     public ResponseEntity<RecommendationResponse> recommend(@AuthenticatedUser Long userId) {
-        return ResponseEntity.ok(recommendationService.recommend(userId));
+        return ResponseEntity.ok(RecommendationResponse.from(recommendationService.recommend(userId)));
     }
 }

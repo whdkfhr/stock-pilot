@@ -1,6 +1,6 @@
 package com.arok2.stockpilot.recommendation.cache;
 
-import com.arok2.stockpilot.recommendation.dto.RecommendationResponse;
+import com.arok2.stockpilot.recommendation.service.result.Recommendation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
@@ -28,13 +28,13 @@ public class RedisRecommendationCache implements RecommendationCache {
     }
 
     @Override
-    public RecommendationResponse get(Long userId) {
+    public Recommendation get(Long userId) {
         String json = redisTemplate.opsForValue().get(key(userId));
         if (json == null) {
             return null;
         }
         try {
-            return objectMapper.readValue(json, RecommendationResponse.class);
+            return objectMapper.readValue(json, Recommendation.class);
         } catch (Exception e) {
             log.warn("추천 캐시 역직렬화 실패(캐시 미스로 처리) userId={}: {}", userId, e.getMessage());
             return null;
@@ -42,9 +42,9 @@ public class RedisRecommendationCache implements RecommendationCache {
     }
 
     @Override
-    public void put(Long userId, RecommendationResponse response) {
+    public void put(Long userId, Recommendation recommendation) {
         try {
-            redisTemplate.opsForValue().set(key(userId), objectMapper.writeValueAsString(response), TTL);
+            redisTemplate.opsForValue().set(key(userId), objectMapper.writeValueAsString(recommendation), TTL);
         } catch (Exception e) {
             // 캐시 저장 실패는 무시한다 — 계산 결과는 이미 호출자에게 반환된다.
             log.warn("추천 캐시 저장 실패 userId={}: {}", userId, e.getMessage());

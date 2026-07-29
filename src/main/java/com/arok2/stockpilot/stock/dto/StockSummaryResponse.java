@@ -1,7 +1,7 @@
 package com.arok2.stockpilot.stock.dto;
 
 import com.arok2.stockpilot.price.domain.PriceChange;
-import com.arok2.stockpilot.stock.domain.Stock;
+import com.arok2.stockpilot.stock.service.result.StockSummary;
 
 /**
  * 종목 목록 요약. 관심종목 등록은 stockId(Long), 시세·좋아요·조회는 code를 쓰므로 둘 다 내려준다.
@@ -20,12 +20,20 @@ public record StockSummaryResponse(
         long watchCount,
         long likeCount
 ) {
-    public static StockSummaryResponse of(Stock stock, Long price, Long previousClose) {
-        long watch = stock.getWatchCount() == null ? 0L : stock.getWatchCount();
-        PriceChange priceChange = PriceChange.of(price, previousClose);
+
+    /** 조회 결과를 API 표현으로 평탄화한다(시장 enum → 문자열, 등락 값 객체 → nullable 필드). */
+    public static StockSummaryResponse from(StockSummary summary) {
         return new StockSummaryResponse(
-                stock.getId(), stock.getCode(), stock.getName(),
-                stock.getMarket().name(), stock.getMarket().currency(),
-                price, PriceChange.changeOrNull(priceChange), PriceChange.percentOrNull(priceChange), watch, stock.getLikeCount());
+                summary.id(),
+                summary.code(),
+                summary.name(),
+                summary.market().name(),
+                summary.market().currency(),
+                summary.price(),
+                PriceChange.changeOrNull(summary.change()),
+                PriceChange.percentOrNull(summary.change()),
+                summary.watchCount(),
+                summary.likeCount()
+        );
     }
 }

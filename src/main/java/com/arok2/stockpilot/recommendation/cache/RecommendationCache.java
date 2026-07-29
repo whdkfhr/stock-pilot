@@ -1,6 +1,6 @@
 package com.arok2.stockpilot.recommendation.cache;
 
-import com.arok2.stockpilot.recommendation.dto.RecommendationResponse;
+import com.arok2.stockpilot.recommendation.service.result.Recommendation;
 
 /**
  * 사용자별 추천 결과 캐시(Redis). 추천 계산은 비싸므로 결과를 캐싱한다(Cache-Aside).
@@ -8,9 +8,9 @@ import com.arok2.stockpilot.recommendation.dto.RecommendationResponse;
 public interface RecommendationCache {
 
     /** 캐시된 추천 결과. 없으면 null. */
-    RecommendationResponse get(Long userId);
+    Recommendation get(Long userId);
 
-    void put(Long userId, RecommendationResponse response);
+    void put(Long userId, Recommendation recommendation);
 
     /** 캐시 무효화(성향 변경 등으로 재계산이 필요할 때). */
     void evict(Long userId);

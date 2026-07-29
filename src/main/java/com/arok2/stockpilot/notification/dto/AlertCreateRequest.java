@@ -1,5 +1,7 @@
 package com.arok2.stockpilot.notification.dto;
 
+import com.arok2.stockpilot.notification.service.command.RegisterAlertCommand;
+
 import com.arok2.stockpilot.notification.domain.AlertDirection;
 
 import jakarta.validation.constraints.NotBlank;
@@ -17,4 +19,8 @@ public record AlertCreateRequest(
         @Positive(message = "임계 가격은 0보다 커야 합니다")
         long threshold
 ) {
+
+    public RegisterAlertCommand toCommand(Long userId) {
+        return new RegisterAlertCommand(userId, stockCode, direction, threshold);
+    }
 }

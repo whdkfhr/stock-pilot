@@ -1,7 +1,6 @@
 package com.arok2.stockpilot.stock.dto;
 
-import com.arok2.stockpilot.price.domain.PriceChange;
-import com.arok2.stockpilot.stock.domain.Stock;
+import com.arok2.stockpilot.stock.service.result.StockDetail;
 
 /**
  * 종목 상세. 요약 정보에 투자지표(PER/PBR/ROE/배당률)를 더한다.
@@ -24,13 +23,25 @@ public record StockDetailResponse(
         double roe,
         double dividendYield
 ) {
-    public static StockDetailResponse of(Stock stock, Long price, Long previousClose) {
-        long watch = stock.getWatchCount() == null ? 0L : stock.getWatchCount();
-        PriceChange priceChange = PriceChange.of(price, previousClose);
+
+    /** 상세 조회 결과를 API 표현으로 평탄화한다(요약 평탄화는 {@link StockSummaryResponse}와 동일 규칙). */
+    public static StockDetailResponse from(StockDetail detail) {
+        StockSummaryResponse summary = StockSummaryResponse.from(detail.summary());
         return new StockDetailResponse(
-                stock.getId(), stock.getCode(), stock.getName(),
-                stock.getMarket().name(), stock.getMarket().currency(),
-                price, PriceChange.changeOrNull(priceChange), PriceChange.percentOrNull(priceChange), watch, stock.getLikeCount(),
-                stock.getPer(), stock.getPbr(), stock.getRoe(), stock.getDividendYield());
+                summary.id(),
+                summary.code(),
+                summary.name(),
+                summary.market(),
+                summary.currency(),
+                summary.price(),
+                summary.change(),
+                summary.changePercent(),
+                summary.watchCount(),
+                summary.likeCount(),
+                detail.per(),
+                detail.pbr(),
+                detail.roe(),
+                detail.dividendYield()
+        );
     }
 }

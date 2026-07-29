@@ -67,7 +67,7 @@ com.arok2.stockpilot
 
 ### 4.1 Command / Result 규칙
 
-**커맨드(쓰기·인증) 유스케이스**는 API DTO를 받지도 반환하지도 않는다. HTTP 계약이 바뀌어도
+**모든 서비스**는 API DTO를 받지도 반환하지도 않는다(쓰기·조회 공통). HTTP 계약이 바뀌어도
 비즈니스 로직이 흔들리지 않게 하기 위함이다.
 
 ```
@@ -76,12 +76,13 @@ Controller ◀──(도메인 or Result record)── Service
      └─ Response DTO 변환은 Controller의 책임
 ```
 
-- 입력: `{domain}/service/command/*Command` (예: `SignupCommand`, `UpdateProfileCommand`)
-- 출력: 도메인 객체(`User`, `Watchlist`) 또는 `{domain}/service/result/*`
-  (예: `IssuedToken`, `WatchedStock`) — 표현 형식(`tokenType: "Bearer"` 등)은 담지 않는다.
+- 입력: `{domain}/service/command/*Command` (예: `SignupCommand`, `RegisterAlertCommand`)
+- 출력: 도메인 객체(`User`, `Watchlist`, `AlertCondition`) 또는 `{domain}/service/result/*`
+  (예: `IssuedToken`, `StockSummary`, `Recommendation`)
 
-**조회(Query) 전용 서비스는 예외**로 읽기 모델을 그대로 반환한다(`StockQueryService`).
-질의 결과 자체가 곧 뷰이므로 1:1 복제 레코드를 덧대면 이득 없이 계층만 늘어난다(CQRS의 조회 측).
+**결과 모델은 도메인 타입을 그대로 유지한다** — 시장은 `MarketType`, 등락은 `PriceChange`,
+성향은 `RiskProfile`. 문자열 평탄화·`null` 분해·`tokenType: "Bearer"` 같은 **표현 관심사는
+응답 DTO의 `from()`이 전담**한다. 캐시(Redis)에 저장하는 것도 API DTO가 아니라 결과 모델이다.
 
 ## 5. 동시성 전략
 

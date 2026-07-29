@@ -5,8 +5,8 @@ import com.arok2.stockpilot.user.domain.RiskProfile;
 import com.arok2.stockpilot.stock.domain.Stock;
 import com.arok2.stockpilot.user.domain.User;
 import com.arok2.stockpilot.recommendation.cache.RecommendationCache;
-import com.arok2.stockpilot.recommendation.dto.RecommendationItem;
-import com.arok2.stockpilot.recommendation.dto.RecommendationResponse;
+import com.arok2.stockpilot.recommendation.service.result.Recommendation;
+import com.arok2.stockpilot.recommendation.service.result.ScoredStock;
 import com.arok2.stockpilot.observability.StockPilotMetrics;
 import com.arok2.stockpilot.recommendation.scoring.RecommendationScorer;
 import com.arok2.stockpilot.stock.repository.StockRepository;
@@ -66,12 +66,12 @@ class RecommendationServiceTest {
                 Stock.of("GROWTH", "성장주", 15, 1.5, 25, 0.5),
                 Stock.of("DIV", "배당주", 15, 1.5, 5, 6.0)));
 
-        RecommendationResponse response = service.recommend(1L);
+        Recommendation result = service.recommend(1L);
 
-        assertThat(response.riskProfile()).isEqualTo("DIVIDEND");
+        assertThat(result.riskProfile()).isEqualTo(RiskProfile.DIVIDEND);
         // 배당형이므로 배당주가 1위
-        assertThat(response.items().get(0).code()).isEqualTo("DIV");
-        verify(recommendationCache).put(1L, response);
+        assertThat(result.items().get(0).code()).isEqualTo("DIV");
+        verify(recommendationCache).put(1L, result);
         // 캐시 미스 메트릭 + 계산 타이머 기록 확인
         assertThat(cacheCount(StockPilotMetrics.RESULT_MISS)).isEqualTo(1.0);
         assertThat(meterRegistry.timer(StockPilotMetrics.RECOMMENDATION_COMPUTE).count()).isEqualTo(1L);
@@ -79,13 +79,13 @@ class RecommendationServiceTest {
 
     @Test
     void 캐시히트면_계산없이_캐시값을_반환한다() {
-        RecommendationResponse cached = new RecommendationResponse(
-                1L, "STABLE", Instant.now(), List.of(new RecommendationItem("X", "X", 0.9)));
+        Recommendation cached = new Recommendation(
+                1L, RiskProfile.STABLE, Instant.now(), List.of(new ScoredStock("X", "X", 0.9)));
         given(recommendationCache.get(1L)).willReturn(cached);
 
-        RecommendationResponse response = service.recommend(1L);
+        Recommendation result = service.recommend(1L);
 
-        assertThat(response).isSameAs(cached);
+        assertThat(result).isSameAs(cached);
         verifyNoInteractions(userRepository, stockRepository);
         verify(recommendationCache, never()).put(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.any());
