@@ -26,13 +26,15 @@ public class NotificationController {
     /** 내 알림 목록(인증, 최신순). */
     @GetMapping
     public ResponseEntity<List<NotificationResponse>> myNotifications(@AuthenticatedUser Long userId) {
-        return ResponseEntity.ok(notificationService.getMyNotifications(userId));
+        return ResponseEntity.ok(notificationService.getMyNotifications(userId).stream()
+                .map(NotificationResponse::from)
+                .toList());
     }
 
     /** 알림 읽음 처리(인증, 본인 소유만). */
     @PatchMapping("/{notificationId}/read")
     public ResponseEntity<NotificationResponse> markRead(
             @AuthenticatedUser Long userId, @PathVariable Long notificationId) {
-        return ResponseEntity.ok(notificationService.markRead(userId, notificationId));
+        return ResponseEntity.ok(NotificationResponse.from(notificationService.markRead(userId, notificationId)));
     }
 }

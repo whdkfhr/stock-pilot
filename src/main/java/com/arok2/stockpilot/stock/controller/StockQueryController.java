@@ -27,12 +27,14 @@ public class StockQueryController {
     @GetMapping
     public ResponseEntity<List<StockSummaryResponse>> list(
             @RequestParam(name = "q", required = false) String q) {
-        return ResponseEntity.ok(stockQueryService.getAll(q));
+        return ResponseEntity.ok(stockQueryService.getAll(q).stream()
+                .map(StockSummaryResponse::from)
+                .toList());
     }
 
     /** 종목 상세 + 투자지표(공개). */
     @GetMapping("/{code}")
     public ResponseEntity<StockDetailResponse> detail(@PathVariable String code) {
-        return ResponseEntity.ok(stockQueryService.getByCode(code));
+        return ResponseEntity.ok(StockDetailResponse.from(stockQueryService.getByCode(code)));
     }
 }
