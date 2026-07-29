@@ -34,13 +34,15 @@ public class AlertController {
     public ResponseEntity<AlertResponse> create(
             @AuthenticatedUser Long userId,
             @Valid @RequestBody AlertCreateRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(alertService.create(userId, request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(AlertResponse.from(alertService.create(request.toCommand(userId))));
     }
 
     /** 내 알림 조건 목록(인증). */
     @GetMapping
     public ResponseEntity<List<AlertResponse>> myAlerts(@AuthenticatedUser Long userId) {
-        return ResponseEntity.ok(alertService.getMyAlerts(userId));
+        return ResponseEntity.ok(alertService.getMyAlerts(userId).stream()
+                .map(AlertResponse::from)
+                .toList());
     }
 
     /** 알림 조건 삭제(인증, 본인 소유만). */

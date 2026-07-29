@@ -4,8 +4,8 @@ import com.arok2.stockpilot.user.domain.RiskProfile;
 import com.arok2.stockpilot.user.domain.User;
 import com.arok2.stockpilot.exception.UserNotFoundException;
 import com.arok2.stockpilot.recommendation.cache.RecommendationCache;
-import com.arok2.stockpilot.recommendation.dto.RecommendationItem;
-import com.arok2.stockpilot.recommendation.dto.RecommendationResponse;
+import com.arok2.stockpilot.recommendation.service.result.Recommendation;
+import com.arok2.stockpilot.recommendation.service.result.ScoredStock;
 import com.arok2.stockpilot.observability.StockPilotMetrics;
 import com.arok2.stockpilot.recommendation.scoring.RecommendationScorer;
 import com.arok2.stockpilot.stock.repository.StockRepository;
@@ -49,8 +49,8 @@ public class RecommendationService {
      * 캐시 적중/미스와 계산 소요 시간을 메트릭으로 관측한다.
      */
     @Transactional(readOnly = true)
-    public RecommendationResponse recommend(Long userId) {
-        RecommendationResponse cached = recommendationCache.get(userId);
+    public Recommendation recommend(Long userId) {
+        Recommendation cached = recommendationCache.get(userId);
         if (cached != null) {
             meterRegistry.counter(StockPilotMetrics.RECOMMENDATION_CACHE,
                     StockPilotMetrics.TAG_RESULT, StockPilotMetrics.RESULT_HIT).increment();
@@ -64,23 +64,22 @@ public class RecommendationService {
                 .record(() -> computeAndCache(userId));
     }
 
-    private RecommendationResponse computeAndCache(Long userId) {
+    private Recommendation computeAndCache(Long userId) {
         User user = userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
         RiskProfile profile = user.getRiskProfile();
 
-        List<RecommendationItem> items = stockRepository.findAll().stream()
-                .map(stock -> new RecommendationItem(
+        List<ScoredStock> items = stockRepository.findAll().stream()
+                .map(stock -> new ScoredStock(
                         stock.getCode(),
                         stock.getName(),
                         round(scorer.score(profile, stock))))
-                .sorted(Comparator.comparingDouble(RecommendationItem::score).reversed())
+                .sorted(Comparator.comparingDouble(ScoredStock::score).reversed())
                 .limit(TOP_N)
                 .toList();
 
-        RecommendationResponse response = new RecommendationResponse(
-                userId, profile.name(), Instant.now(), items);
-        recommendationCache.put(userId, response);
-        return response;
+        Recommendation recommendation = new Recommendation(userId, profile, Instant.now(), items);
+        recommendationCache.put(userId, recommendation);
+        return recommendation;
     }
 
     private double round(double value) {

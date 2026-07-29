@@ -2,8 +2,7 @@ package com.arok2.stockpilot.notification.service;
 
 import com.arok2.stockpilot.exception.AlertNotFoundException;
 import com.arok2.stockpilot.notification.domain.AlertCondition;
-import com.arok2.stockpilot.notification.dto.AlertCreateRequest;
-import com.arok2.stockpilot.notification.dto.AlertResponse;
+import com.arok2.stockpilot.notification.service.command.RegisterAlertCommand;
 import com.arok2.stockpilot.notification.repository.AlertConditionRepository;
 
 import org.springframework.stereotype.Service;
@@ -25,17 +24,14 @@ public class AlertService {
     }
 
     @Transactional
-    public AlertResponse create(Long userId, AlertCreateRequest request) {
-        AlertCondition saved = alertConditionRepository.save(
-                AlertCondition.of(userId, request.stockCode(), request.direction(), request.threshold()));
-        return AlertResponse.from(saved);
+    public AlertCondition create(RegisterAlertCommand command) {
+        return alertConditionRepository.save(AlertCondition.of(
+                command.userId(), command.stockCode(), command.direction(), command.threshold()));
     }
 
     @Transactional(readOnly = true)
-    public List<AlertResponse> getMyAlerts(Long userId) {
-        return alertConditionRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(AlertResponse::from)
-                .toList();
+    public List<AlertCondition> getMyAlerts(Long userId) {
+        return alertConditionRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
     @Transactional

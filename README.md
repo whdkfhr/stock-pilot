@@ -58,7 +58,7 @@ flowchart LR
 ```
 
 - **도메인 단위 패키지**: `{auth,user,stock,watchlist,price,recommendation,ranking,notification,…}` 각각이 `controller/service/domain/repository/dto`를 갖는다(전역 레이어 패키지 없음).
-- **레이어 규칙**: Controller → Service → Repository. **커맨드 유스케이스는 API DTO를 받지도 반환하지도 않는다** — 입력은 `Command`, 출력은 도메인/결과 모델이고 응답 DTO 변환은 Controller 책임.
+- **레이어 규칙**: Controller → Service → Repository. **서비스는 API DTO를 받지도 반환하지도 않는다** — 입력은 `Command`, 출력은 도메인/결과 모델(도메인 타입 유지)이고 표현용 평탄화는 응답 DTO의 `from()`이 전담.
 - **이벤트 기반**: 실시간 시세는 Kafka로 비동기 수집·분산 소비(파티션 키=종목코드로 종목별 순차 보장).
 - **Cache-Aside**: 조회 성능이 중요한 데이터는 Redis 우선, DB 폴백.
 
@@ -111,7 +111,7 @@ flowchart LR
 외부 리뷰에서 "레이어드 구조에 도메인 개념을 얹은 단계"라는 평을 받고, 지적을 4단계로 나눠 해소했다. **각 단계는 브랜치를 분리하고 테스트 green을 확인한 뒤 병합**했다.
 
 - **규칙이 있어야 할 자리로** — 전일 대비 등락 계산이 응답 DTO **3곳에 복제**돼 있던 것을 `PriceChange` 값 객체로 통합. 성향별 가중치는 계산기의 `switch`에서 꺼내 `RiskProfile` enum이 직접 소유하게 했다(성향 추가 시 enum만 확장).
-- **HTTP 계약과 유스케이스 분리** — 서비스가 `SignupRequest`/`SignupResponse`를 직접 받고 반환하던 것을 `Command` 입력 + 도메인/결과 모델 출력으로 바꿔 **API DTO 의존 0건**. 단, 조회 전용 서비스는 읽기 모델을 그대로 반환하는 편이 이득이라 판단해 남기고 **근거를 문서에 남겼다**(CQRS 조회 측).
+- **HTTP 계약과 유스케이스 분리** — 서비스가 `SignupRequest`/`SignupResponse`를 직접 받고 반환하던 것을 `Command` 입력 + 결과 모델 출력으로 바꿔 **전 서비스 API DTO 의존 0건**. 결과 모델은 `MarketType`·`PriceChange`·`RiskProfile` 같은 **도메인 타입을 유지**하고, 문자열 평탄화·null 분해는 응답 DTO가 맡는다. Redis 캐시에 저장하는 것도 API DTO가 아닌 결과 모델이다.
 - **동시성 근거를 운영 DB로** — 갱신 손실 방지는 DB 엔진의 락 동작에 기대는데 H2 검증만으로는 근거가 약했다. **Testcontainers PostgreSQL**에서 50스레드 동시 등록(갱신 손실 0), 중복 등록 1건만 성공(실패가 카운트를 올리지 않음), 등록/해제 혼재 시 row 수 일치까지 재검증.
 - **문서와 구현의 불일치 제거** — 문서는 `@Version` 낙관적 락이라 적혀 있었으나 실제는 DB 원자적 UPDATE였다. 문서를 구현에 맞추고 **왜 `@Version`을 쓰지 않는지**(경합 잦은 카운터는 재시도 비용만 증가) 근거를 명시.
 
