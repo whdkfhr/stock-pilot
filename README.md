@@ -7,8 +7,8 @@
 이벤트 기반 아키텍처 · 실시간 스트리밍 · 관측성**을 하나의 도메인 안에서 다루는 것을
 목표로 한 **백엔드 중심 포트폴리오**다.
 
-![release](https://img.shields.io/badge/release-v1.1.0-blue)
-![tests](https://img.shields.io/badge/tests-132%20green-success)
+![release](https://img.shields.io/badge/release-v1.2.0-blue)
+![tests](https://img.shields.io/badge/tests-149%20green-success)
 ![java](https://img.shields.io/badge/Java-17-orange)
 ![springboot](https://img.shields.io/badge/Spring%20Boot-3.5-6DB33F)
 
@@ -29,7 +29,7 @@
 | **Messaging / Cache / DB** | Apache Kafka · Redis · PostgreSQL |
 | **Realtime** | Server-Sent Events(SSE) · KIS WebSocket(체결가 H0STCNT0) |
 | **Observability** | Actuator · Micrometer · Prometheus · Grafana |
-| **Test / Infra** | JUnit 5 · Testcontainers(실 Postgres/Kafka) · H2 · Docker Compose |
+| **Test / Infra** | JUnit 5 · H2/`@EmbeddedKafka`(기본) · **Testcontainers PostgreSQL(동시성)** · Docker Compose |
 | **Frontend** | Vue 3 · Vite · TypeScript · Pinia · Vue Router · axios |
 
 ---
@@ -57,7 +57,8 @@ flowchart LR
     API --- PG
 ```
 
-- **레이어드**: Controller → Service → Repository, 도메인 단위 패키지(`com.arok2.stockpilot.*`).
+- **도메인 단위 패키지**: `{auth,user,stock,watchlist,price,recommendation,ranking,notification,…}` 각각이 `controller/service/domain/repository/dto`를 갖는다(전역 레이어 패키지 없음).
+- **레이어 규칙**: Controller → Service → Repository. **커맨드 유스케이스는 API DTO를 받지도 반환하지도 않는다** — 입력은 `Command`, 출력은 도메인/결과 모델이고 응답 DTO 변환은 Controller 책임.
 - **이벤트 기반**: 실시간 시세는 Kafka로 비동기 수집·분산 소비(파티션 키=종목코드로 종목별 순차 보장).
 - **Cache-Aside**: 조회 성능이 중요한 데이터는 Redis 우선, DB 폴백.
 
@@ -70,7 +71,7 @@ flowchart LR
 | **Kafka** | 초당 유입되는 시세를 API가 직접 DB에 넣으면 병목 | 수집→Kafka→Consumer로 분리, 한 토픽을 **4개 group**(캐시/이력/알림/스트림)이 독립 소비 |
 | **Redis ZSET** | 인기 랭킹을 `ORDER BY count DESC`로 매번 조회하면 느림 | Sorted Set `ZINCRBY`/`ZREVRANGE`로 O(logN) 랭킹 |
 | **Redis Set** | 다수 동시 좋아요 시 lost update·중복 | `SADD` 멱등(1인 1좋아요) + `SCARD` 정확 집계, 배치로 DB 동기화 |
-| **동시성 제어** | 다수 동시 관심등록 시 watch_count 갱신 손실 | DB 원자적 `UPDATE ... SET watch_count = watch_count + 1` + **Testcontainers 동시성 통합테스트로 갱신 손실 0 증명** |
+| **동시성 제어** | 다수 동시 관심등록 시 watch_count 갱신 손실 | DB 원자적 `UPDATE ... SET watch_count = watch_count + 1`. **운영과 같은 PostgreSQL(Testcontainers)에서 50스레드 동시 등록 → 갱신 손실 0 증명** |
 | **Cache-Aside** | 추천 계산 비용 | Redis 캐시 우선·미스 시 계산 후 캐싱(TTL), 성향 변경 시 무효화, hit/miss 메트릭으로 적중률 관측 |
 | **이벤트 드리븐** | 시세 조건 알림 | 시세 이벤트 소비 → 조건 평가 → 원자적 `ACTIVE→TRIGGERED`로 1회만 발화 |
 | **SSE / WebSocket** | 폴링 지연 없이 실시간 반영 | Kafka `price-stream` group → SSE push, KIS WebSocket 체결가로 진짜 틱 스트리밍 |
@@ -103,7 +104,16 @@ flowchart LR
 - 시세 공급을 `PriceSource`로 추상화한 덕에 **랜덤 목 → 야후 → KIS 실시간** 승격이 **구현체 교체 + 프로퍼티 스위치만으로** 완료. Kafka·캐시·SSE·알림·추천 등 **나머지 파이프라인은 무변경** — 설계 의도(확장성)를 실제 승격으로 증명.
 
 ### 5. 실 인프라 없이 통과하는 테스트 전략
-- 외부 의존이 많음에도 CI에서 인프라 없이 통과: **H2**(단위) + `@EmbeddedKafka` + Redis `@MockitoBean`, **동시성·인프라 의존은 Testcontainers(실 Postgres/Kafka)** 로 분리. 외부 API는 조회/파싱을 분리해 **실제 응답 샘플로 파싱 단위테스트**. → **테스트 132개 green**.
+- 외부 의존이 많음에도 CI에서 인프라 없이 통과: **H2** + `@EmbeddedKafka` + Redis `@MockitoBean`. 외부 API는 조회/파싱을 분리해 **실제 응답 샘플로 파싱 단위테스트**.
+- Testcontainers 테스트는 `disabledWithoutDocker`로 **Docker가 없으면 자동 skip** → "인프라 없이 `./gradlew test` 통과" 규칙을 깨지 않으면서 운영 DB 검증을 얹었다. → **테스트 149개 green**.
+
+### 6. 코드 리뷰 피드백을 구조 개선으로 (v1.2.0)
+외부 리뷰에서 "레이어드 구조에 도메인 개념을 얹은 단계"라는 평을 받고, 지적을 4단계로 나눠 해소했다. **각 단계는 브랜치를 분리하고 테스트 green을 확인한 뒤 병합**했다.
+
+- **규칙이 있어야 할 자리로** — 전일 대비 등락 계산이 응답 DTO **3곳에 복제**돼 있던 것을 `PriceChange` 값 객체로 통합. 성향별 가중치는 계산기의 `switch`에서 꺼내 `RiskProfile` enum이 직접 소유하게 했다(성향 추가 시 enum만 확장).
+- **HTTP 계약과 유스케이스 분리** — 서비스가 `SignupRequest`/`SignupResponse`를 직접 받고 반환하던 것을 `Command` 입력 + 도메인/결과 모델 출력으로 바꿔 **API DTO 의존 0건**. 단, 조회 전용 서비스는 읽기 모델을 그대로 반환하는 편이 이득이라 판단해 남기고 **근거를 문서에 남겼다**(CQRS 조회 측).
+- **동시성 근거를 운영 DB로** — 갱신 손실 방지는 DB 엔진의 락 동작에 기대는데 H2 검증만으로는 근거가 약했다. **Testcontainers PostgreSQL**에서 50스레드 동시 등록(갱신 손실 0), 중복 등록 1건만 성공(실패가 카운트를 올리지 않음), 등록/해제 혼재 시 row 수 일치까지 재검증.
+- **문서와 구현의 불일치 제거** — 문서는 `@Version` 낙관적 락이라 적혀 있었으나 실제는 DB 원자적 UPDATE였다. 문서를 구현에 맞추고 **왜 `@Version`을 쓰지 않는지**(경합 잦은 카운터는 재시도 비용만 증가) 근거를 명시.
 
 ---
 
@@ -132,6 +142,7 @@ flowchart LR
 | v0.9.0 | Yahoo 실 시세 연동 | `PriceSource` 교체만으로 목→실 데이터 전환 |
 | **v1.0.0** | **Vue 프론트 + KIS 실시간 + SSE** | 실시간 UX(틱 깜빡임), KIS REST 하이브리드, 서버 push |
 | **v1.1.0** | **상세 롤링 + KIS WebSocket 체결가** | 대표가격 롤링, WS 틱 스트리밍(초당 제한 완전 제거) |
+| **v1.2.0** | **도메인 구조 정렬 + 운영 DB 동시성 검증** | 도메인 패키지·Command 분리·규칙 객체화, Testcontainers PostgreSQL 동시성 |
 
 ---
 
@@ -189,7 +200,9 @@ docker compose up -d
 # 3. 프론트엔드
 cd frontend && npm install && npm run dev   # http://localhost:5173
 
-# 4. 테스트 (인프라 없이도 통과 — H2 프로파일 / 동시성은 Testcontainers)
+# 4. 테스트 — 인프라 없이도 통과한다(H2 프로파일).
+#    Docker가 있으면 동시성 테스트가 실제 PostgreSQL(Testcontainers)로 함께 돌고,
+#    없으면 해당 테스트만 자동 skip된다.
 ./gradlew test
 ```
 
