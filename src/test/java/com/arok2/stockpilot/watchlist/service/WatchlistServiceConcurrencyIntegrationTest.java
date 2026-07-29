@@ -29,9 +29,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * 스레드마다 독립적으로 이 메서드를 직접 호출하여 각기 별도의 트랜잭션/커넥션에서
  * DB 원자적 UPDATE(watch_count = watch_count + 1)가 수행되도록 한다.
  *
- * 테스트 환경 제약(Testcontainers 미사용)으로 인해 기본 테스트 프로파일의 DB
- * (H2 등)를 사용하되, 실제 UPDATE 문이 row-level에서 직렬화되는 동작을 검증하는
- * 데 초점을 둔다. PostgreSQL 등 운영 DB와 락 동작이 다를 수 있다는 한계가 있다.
+ * 이 테스트는 <b>빠른 H2</b>에서 로직 수준의 회귀를 잡는 역할이다. DB 엔진의 락 동작까지
+ * 포함한 운영 근거는 실제 PostgreSQL로 도는
+ * {@link WatchlistConcurrencyPostgresTest}가 담당한다(두 층을 함께 유지).
  */
 @SpringBootTest
 @ActiveProfiles("test")
