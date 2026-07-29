@@ -1,6 +1,6 @@
 package com.arok2.stockpilot.price.source;
 
-import com.arok2.stockpilot.domain.MarketType;
+import com.arok2.stockpilot.stock.domain.MarketType;
 
 /**
  * 종목코드를 Yahoo Finance 심볼로 변환한다.

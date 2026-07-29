@@ -1,6 +1,6 @@
 package com.arok2.stockpilot.exception;
 
-import com.arok2.stockpilot.dto.error.ErrorResponse;
+import com.arok2.stockpilot.common.dto.ErrorResponse;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 
 import org.slf4j.Logger;

@@ -1,12 +1,12 @@
 package com.arok2.stockpilot.recommendation.controller;
 
-import com.arok2.stockpilot.domain.InvestmentPeriod;
-import com.arok2.stockpilot.domain.RiskProfile;
-import com.arok2.stockpilot.domain.Stock;
-import com.arok2.stockpilot.domain.User;
+import com.arok2.stockpilot.user.domain.InvestmentPeriod;
+import com.arok2.stockpilot.user.domain.RiskProfile;
+import com.arok2.stockpilot.stock.domain.Stock;
+import com.arok2.stockpilot.user.domain.User;
 import com.arok2.stockpilot.recommendation.cache.RecommendationCache;
-import com.arok2.stockpilot.repository.StockRepository;
-import com.arok2.stockpilot.repository.UserRepository;
+import com.arok2.stockpilot.stock.repository.StockRepository;
+import com.arok2.stockpilot.user.repository.UserRepository;
 import com.arok2.stockpilot.security.JwtTokenProvider;
 
 import org.junit.jupiter.api.AfterEach;

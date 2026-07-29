@@ -1,9 +1,9 @@
 package com.arok2.stockpilot.ranking;
 
-import com.arok2.stockpilot.domain.Stock;
+import com.arok2.stockpilot.stock.domain.Stock;
 import com.arok2.stockpilot.observability.StockPilotMetrics;
 import com.arok2.stockpilot.ranking.dto.RankingItem;
-import com.arok2.stockpilot.repository.StockRepository;
+import com.arok2.stockpilot.stock.repository.StockRepository;
 
 import io.micrometer.core.instrument.MeterRegistry;
 

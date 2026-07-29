@@ -29,15 +29,21 @@ Architect 에이전트는 개별 DESIGN을 작성할 때 이 문서와의 일관
 
 ```
 com.arok2.stockpilot
- ├── auth/              # 인증/인가 (JWT, Security)
+ ├── auth/             # 인증/인가 (로그인·회원가입)
  ├── user/             # 사용자, 투자 성향
- ├── stock/            # 종목 마스터
+ ├── stock/            # 종목 마스터·조회
  ├── watchlist/        # 관심종목 (동시성)
- ├── price/            # 실시간 시세 (Kafka producer/consumer)
- ├── recommendation/   # 추천 엔진
+ ├── price/            # 실시간 시세 (source/producer/consumer/stream/chart/quote)
+ ├── recommendation/   # 추천 엔진 (scoring, cache)
  ├── ranking/          # 인기 랭킹 (Redis ZSET)
- ├── notification/     # 가격 알림
- └── common/           # 공통 (config, exception, response)
+ ├── notification/     # 가격 알림 (조건·발화)
+ ├── like/             # 좋아요 (Redis Set)
+ ├── trading/          # 투자자 매매동향
+ ├── security/         # JWT 필터·인증 컨텍스트
+ ├── config/           # 스프링 설정
+ ├── exception/        # 글로벌 예외 처리
+ ├── observability/    # 메트릭
+ └── common/           # 공통 응답(dto) 등
 ```
 
 각 도메인 패키지 내부는 다음 하위 구조를 따른다:
@@ -59,13 +65,35 @@ com.arok2.stockpilot
 - DTO: API 계약 전용. 도메인 엔티티를 API 응답으로 직접 노출하지 않는다.
 - 의존성 주입: 생성자 주입만 사용 (`@Autowired` 필드 주입 금지).
 
+### 4.1 Command / Result 규칙
+
+**커맨드(쓰기·인증) 유스케이스**는 API DTO를 받지도 반환하지도 않는다. HTTP 계약이 바뀌어도
+비즈니스 로직이 흔들리지 않게 하기 위함이다.
+
+```
+Controller ──(Request DTO.toCommand())──▶ Service(Command)
+Controller ◀──(도메인 or Result record)── Service
+     └─ Response DTO 변환은 Controller의 책임
+```
+
+- 입력: `{domain}/service/command/*Command` (예: `SignupCommand`, `UpdateProfileCommand`)
+- 출력: 도메인 객체(`User`, `Watchlist`) 또는 `{domain}/service/result/*`
+  (예: `IssuedToken`, `WatchedStock`) — 표현 형식(`tokenType: "Bearer"` 등)은 담지 않는다.
+
+**조회(Query) 전용 서비스는 예외**로 읽기 모델을 그대로 반환한다(`StockQueryService`).
+질의 결과 자체가 곧 뷰이므로 1:1 복제 레코드를 덧대면 이득 없이 계층만 늘어난다(CQRS의 조회 측).
+
 ## 5. 동시성 전략
 
 | 대상 | 전략 |
 |------|------|
-| 관심종목 watch_count | JPA 낙관적 락(`@Version`) |
+| 관심종목 watch_count | **DB 원자적 UPDATE**(`SET watch_count = watch_count + 1`) |
 | 좋아요 / 조회수 | Redis Atomic(INCR) → 주기적 배치 DB Sync |
 | 시세 순차 처리 | Kafka 파티션 키(종목코드) 기반 순서 보장 |
+
+> **watch_count에 낙관적 락(`@Version`)을 쓰지 않는 이유**: 관심등록은 경합이 잦은 단순 카운터
+> 증감이라 `@Version`은 충돌 시 재시도 비용만 늘어난다. 단일 원자적 UPDATE로 DB가 직렬화하게
+> 맡기는 편이 갱신 손실 0을 더 단순하게 보장한다(동시성 통합테스트로 검증).
 
 ## 6. Kafka 토픽 (기준)
 
@@ -93,3 +121,18 @@ com.arok2.stockpilot
 
 - `/actuator/prometheus`로 메트릭 노출.
 - 도메인 핵심 지표는 Micrometer 커스텀 메트릭으로 계측.
+
+## 10. 테스트 전략
+
+기본은 **인프라 없이 도는 빠른 테스트**, 예외적으로 **운영과 같은 엔진**을 쓴다.
+
+| 층 | 환경 | 담당 |
+|----|------|------|
+| 단위 | 순수 JUnit/Mockito | 도메인 규칙(등락 계산·성향 가중치·관심등록), 파싱(KIS/야후 실측 응답) |
+| 통합(기본) | H2 + `@EmbeddedKafka` + Redis Mock | API 계약, 서비스 흐름, 로직 회귀 |
+| 통합(운영 DB) | **Testcontainers PostgreSQL** | **동시성** — 갱신 손실·유니크 제약처럼 DB 엔진의 락/격리에 결과가 좌우되는 검증 |
+
+- `./gradlew test`는 로컬 인프라 없이 통과해야 한다. Testcontainers 테스트는
+  `@Testcontainers(disabledWithoutDocker = true)`로 **Docker가 없으면 자동 skip**된다.
+- PostgreSQL 컨테이너는 클래스마다 띄우지 않고 **싱글턴으로 공유**한다(`PostgresIntegrationTest`).
+- 동시성은 **H2(빠른 회귀) + PostgreSQL(운영 근거)** 두 층을 함께 유지한다.
