@@ -1,5 +1,6 @@
 package com.arok2.stockpilot.stock.dto;
 
+import com.arok2.stockpilot.price.domain.PriceChange;
 import com.arok2.stockpilot.stock.domain.Stock;
 
 /**
@@ -25,16 +26,11 @@ public record StockDetailResponse(
 ) {
     public static StockDetailResponse of(Stock stock, Long price, Long previousClose) {
         long watch = stock.getWatchCount() == null ? 0L : stock.getWatchCount();
-        Long change = null;
-        Double changePercent = null;
-        if (price != null && previousClose != null && previousClose != 0) {
-            change = price - previousClose;
-            changePercent = Math.round((change * 10000.0) / previousClose) / 100.0;
-        }
+        PriceChange priceChange = PriceChange.of(price, previousClose);
         return new StockDetailResponse(
                 stock.getId(), stock.getCode(), stock.getName(),
                 stock.getMarket().name(), stock.getMarket().currency(),
-                price, change, changePercent, watch, stock.getLikeCount(),
+                price, PriceChange.changeOrNull(priceChange), PriceChange.percentOrNull(priceChange), watch, stock.getLikeCount(),
                 stock.getPer(), stock.getPbr(), stock.getRoe(), stock.getDividendYield());
     }
 }

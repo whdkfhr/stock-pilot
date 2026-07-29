@@ -57,7 +57,7 @@ class WatchlistServiceTest {
         when(stockRepository.findById(stockId)).thenReturn(Optional.of(stock));
         when(watchlistRepository.existsByUserIdAndStockId(userId, stockId)).thenReturn(false);
 
-        Watchlist saved = new Watchlist(userId, stockId);
+        Watchlist saved = Watchlist.register(userId, stockId);
         setId(saved, 1001L);
         when(watchlistRepository.save(any(Watchlist.class))).thenReturn(saved);
 
@@ -119,7 +119,7 @@ class WatchlistServiceTest {
     void unwatch_success_decrementsWatchCountOnce() {
         Long userId = 7L;
         Long stockId = 42L;
-        Watchlist existing = new Watchlist(userId, stockId);
+        Watchlist existing = Watchlist.register(userId, stockId);
         setId(existing, 1001L);
 
         when(watchlistRepository.findByUserIdAndStockId(userId, stockId)).thenReturn(Optional.of(existing));
@@ -150,7 +150,7 @@ class WatchlistServiceTest {
         Long userId = 7L;
         Pageable pageable = PageRequest.of(0, 20);
 
-        Watchlist w1 = new Watchlist(userId, 42L);
+        Watchlist w1 = Watchlist.register(userId, 42L);
         setId(w1, 1001L);
         Page<Watchlist> page = new PageImpl<>(List.of(w1), pageable, 1);
 

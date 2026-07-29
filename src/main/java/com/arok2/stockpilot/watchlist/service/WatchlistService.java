@@ -46,7 +46,7 @@ public class WatchlistService {
 
         Watchlist saved;
         try {
-            saved = watchlistRepository.save(new Watchlist(userId, stockId));
+            saved = watchlistRepository.save(Watchlist.register(userId, stockId));
         } catch (DataIntegrityViolationException e) {
             throw new WatchlistAlreadyExistsException(userId, stockId);
         }
