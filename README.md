@@ -3,7 +3,7 @@
 외부 시세 API의 호출 제한을 겪으며 REST 폴링 구조의 한계를 확인하고, WebSocket 수집과 Kafka 기반 처리 흐름으로 전환한 실시간 데이터 처리 학습 프로젝트입니다.
 
 ![release](https://img.shields.io/badge/release-v1.2.0-blue)
-![tests](https://img.shields.io/badge/tests-153%20green-success)
+![tests](https://img.shields.io/badge/tests-149%20green-success)
 ![java](https://img.shields.io/badge/Java-17-orange)
 ![springboot](https://img.shields.io/badge/Spring%20Boot-3.5-6DB33F)
 
