@@ -1,11 +1,6 @@
-# StockPilot 🛩️
+# StockPilot
 
-> **"당신의 투자를 조종하는 파일럿"** — 투자 성향 기반 개인 맞춤 주식 추천 플랫폼
-
-투자 성향(위험 성향 · 투자 기간)에 맞춰 개인화된 종목을 추천하는 서비스.
-단순 CRUD가 아니라 실무에서 쓰는 **메시지 브로커(Kafka) · 캐시(Redis) · 동시성 제어 ·
-이벤트 기반 아키텍처 · 실시간 스트리밍 · 관측성**을 하나의 도메인 안에서 다루는 것을
-목표로 한 **백엔드 중심 포트폴리오**다.
+외부 시세 API의 호출 제한을 겪으며 REST 폴링 구조의 한계를 확인하고, WebSocket 수집과 Kafka 기반 처리 흐름으로 전환한 실시간 데이터 처리 학습 프로젝트입니다.
 
 ![release](https://img.shields.io/badge/release-v1.2.0-blue)
 ![tests](https://img.shields.io/badge/tests-149%20green-success)
@@ -13,11 +8,131 @@
 ![springboot](https://img.shields.io/badge/Spring%20Boot-3.5-6DB33F)
 
 <p align="center">
-  <img src="docs/assets/demo.gif" width="320" alt="StockPilot 실시간 데모 — 종목 상세 대표가격 롤링(SSE push)" />
+  <img src="docs/assets/demo.gif" width="320" alt="StockPilot demo - realtime price update through SSE" />
 </p>
 
-> 종목 상세에서 **대표가격이 실시간 체결마다 카운트업 롤링**하는 모습(Kafka→SSE push).
-> 백엔드 프로젝트라 라이브 URL 대신 녹화 데모 + 아키텍처 도식으로 증명한다.
+> 종목 상세 화면에서 Kafka로 들어온 시세 이벤트가 SSE를 통해 브라우저에 전달되고, 대표 가격이 갱신되는 흐름을 녹화한 데모입니다.
+
+---
+
+## 프로젝트 배경
+
+처음 목표는 투자 성향과 투자 기간에 맞춰 종목을 추천하는 백엔드 서비스를 만드는 것이었습니다. 구현을 진행하면서 단순 추천 API보다 먼저 풀어야 할 문제가 보였습니다. 추천, 알림, 랭킹은 모두 신뢰할 수 있는 시세 흐름 위에서 동작해야 하는데, 외부 시세 API를 REST로 반복 호출하는 방식은 다수 종목을 실시간에 가깝게 다루기 어렵다는 점이었습니다.
+
+그래서 이 프로젝트의 중심을 "주식 추천 서비스"에서 한 단계 더 좁혀, 외부 API의 제약을 실제로 마주하고 수집 구조를 바꿔 보는 실시간 데이터 처리 프로젝트로 잡았습니다.
+
+핵심 질문은 다음과 같았습니다.
+
+- REST 폴링으로 여러 종목의 현재가를 계속 가져오면 어떤 한계가 생기는가?
+- WebSocket 체결가 수신으로 전환하면 수집 구조와 검증 방식은 어떻게 달라지는가?
+- Kafka, Redis, SSE는 각각 어디까지 책임지는 것이 적절한가?
+- 외부 API, 메시지 브로커, 캐시가 얽힌 흐름을 로컬 테스트와 실행 로그로 어떻게 확인할 수 있는가?
+
+---
+
+## 문제와 전환 과정
+
+### 1. REST 폴링의 한계 확인
+
+초기에는 `PriceSource` 구현체를 통해 Yahoo Finance와 KIS REST API에서 시세를 가져왔습니다. Yahoo는 별도 키 없이 사용할 수 있었지만 국내 종목은 지연 시세에 가깝고, KIS REST는 국내 현재가를 더 직접적으로 확인할 수 있었습니다.
+
+문제는 국내 여러 종목을 지속 폴링할 때 발생했습니다. KIS REST API에서 초당 거래건수 초과 오류(`EGW00201`)가 반복되었고, 호출 간격을 늘리거나 재시도를 추가해도 다수 종목을 계속 조회하는 상황에서는 안정적이지 않았습니다. 단발성 호출은 통과하지만, 여러 종목을 반복적으로 조회하면 누적 호출 패턴이 제한에 걸리는 것으로 확인했습니다.
+
+이 경험으로 REST 폴링은 "가끔 조회하는 현재가 API"에는 적합해도, 여러 종목을 지속적으로 갱신하는 실시간 수집 구조에는 맞지 않는다고 판단했습니다.
+
+### 2. WebSocket 수집으로 전환
+
+KIS WebSocket 체결가(`H0STCNT0`)를 직접 연결해 실제 수신 프레임을 확인했습니다. 체결 메시지는 `^` 구분 필드로 구성되어 있었고, 실측 프레임을 기준으로 종목코드, 현재가, 전일대비, 누적거래량을 파싱했습니다.
+
+WebSocket 클라이언트에는 다음 처리를 넣었습니다.
+
+- 체결가 메시지 파싱 및 Kafka `stock-price` 토픽 발행
+- 프래그먼트 메시지 누적 처리
+- PINGPONG 응답 처리
+- 연결 종료 시 재연결
+- WebSocket이 국내 종목을 처리할 때 REST 스케줄러의 국내 폴링 생략
+
+이후 테스트 구간에서 REST API rate limit 없이 WebSocket 체결가 수신을 확인했고, 수집된 이벤트가 Kafka, Redis 캐시, SSE 전달 흐름으로 이어지는지 실행 로그와 화면 갱신으로 검증했습니다. 다만 이 결과는 테스트한 종목 수와 실행 환경 안에서의 확인이며, 모든 시장 상황에서의 처리량을 보장한다는 의미는 아닙니다.
+
+### 3. 인터페이스 추상화로 외부 시세 소스 교체
+
+시세 공급원은 `PriceSource` 인터페이스로 분리했습니다. 덕분에 랜덤 목 데이터, Yahoo REST, KIS REST/WebSocket을 같은 파이프라인 앞단에 연결할 수 있었습니다.
+
+```java
+public interface PriceSource {
+    StockPriceEvent fetch(Stock stock);
+}
+```
+
+시세 소스가 바뀌어도 Kafka 이후의 캐시, 이력 저장, 알림, SSE 전달 흐름은 그대로 유지했습니다. 이 구조 덕분에 외부 API를 바꾸는 작업이 서비스 전체 수정으로 번지지 않았고, 구현체 교체와 설정값 변경만으로 수집 방식을 단계적으로 바꿀 수 있었습니다.
+
+---
+
+## 처리 흐름
+
+```mermaid
+flowchart LR
+    subgraph SRC["시세 소스"]
+        RW["Random<br/>테스트/오프라인"]
+        YH["Yahoo REST<br/>기본/미국 종목"]
+        KIS["KIS WebSocket<br/>국내 체결가"]
+    end
+
+    SRC --> ING["PriceSource / WebSocket Client"]
+    ING --> K(("Kafka<br/>stock-price"))
+    K --> C1["price-cache"] --> R[("Redis<br/>최신가 캐시")]
+    K --> C2["price-history"] --> PG[("PostgreSQL<br/>시세 이력")]
+    K --> C3["notification"] --> N["알림 조건 평가"]
+    K --> C4["price-stream"] --> SSE["SSE"]
+    SSE --> WEB["Vue 화면"]
+
+    WEB --> API["Spring REST API"]
+    API --- R
+    API --- PG
+```
+
+각 구성 요소의 책임은 다음처럼 나눴습니다.
+
+| 구성 요소 | 맡은 책임 |
+|-----------|-----------|
+| `PriceSource` | 외부 시세 공급원 교체 지점. Random, Yahoo, KIS 구현체를 분리 |
+| KIS WebSocket | 국내 종목 체결가 수신. REST 폴링으로 감당하기 어려운 실시간 입력 처리 |
+| Kafka | 시세 이벤트를 한 번 발행하고 캐시, 이력, 알림, 스트리밍 소비자가 독립적으로 처리 |
+| Redis | 최신가 캐시, 추천 결과 캐시, 인기 랭킹, 좋아요 멱등 처리 |
+| PostgreSQL | 사용자, 종목, 관심종목, 시세 이력, 알림 데이터 영속화 |
+| SSE | 서버에서 브라우저로 시세 변경 이벤트 전달 |
+| Vue | 종목 목록, 상세, 추천, 알림 화면에서 API와 SSE 흐름 확인 |
+
+---
+
+## 주요 기능
+
+- 회원가입, 로그인, JWT 인증
+- 투자 성향 기반 종목 추천
+- 관심종목 등록/해제 및 watch count 갱신
+- 최신가 조회, 차트 데이터 조회, SSE 시세 스트림
+- Redis Sorted Set 기반 인기 랭킹
+- Redis Set 기반 좋아요 멱등 처리
+- 가격 조건 알림 등록 및 시세 이벤트 기반 조건 평가
+- Prometheus/Grafana 기반 메트릭 확인
+
+---
+
+## 검증 방법
+
+외부 API와 인프라에 의존하는 프로젝트라, "실제로 연결했을 때의 로그"와 "로컬에서 반복 가능한 테스트"를 나눠 확인했습니다.
+
+| 검증 대상 | 확인 방법 |
+|-----------|-----------|
+| KIS WebSocket 파싱 | 실제 수신 프레임 샘플을 기준으로 체결가 필드 파싱 단위 테스트 작성 |
+| Kafka 흐름 | `@EmbeddedKafka` 기반 round-trip 테스트로 발행/소비 경로 확인 |
+| Redis 의존 로직 | 테스트에서는 Redis를 mock 처리하고, 캐시/랭킹/좋아요 로직을 서비스 단위로 검증 |
+| 관심종목 동시성 | Testcontainers PostgreSQL에서 다중 스레드 등록/해제 시 카운트 정합성 확인 |
+| 외부 HTTP 안정성 | Yahoo/KIS REST 호출에 연결/읽기 타임아웃을 적용하고 종목 단위 예외 격리 |
+| 관측성 | Actuator/Micrometer 메트릭을 Prometheus로 수집하고 Grafana 대시보드에서 확인 |
+| 프론트 실시간 반영 | Kafka 이벤트가 SSE로 전달되어 상세 화면의 가격 표시가 갱신되는지 실행 화면으로 확인 |
+
+현재 테스트는 로컬 인프라 없이도 기본적으로 통과하도록 구성했습니다. H2, `@EmbeddedKafka`, mock Redis를 사용하고, Docker가 있는 환경에서는 PostgreSQL Testcontainers 기반 동시성 테스트가 함께 실행됩니다.
 
 ---
 
@@ -25,224 +140,127 @@
 
 | 영역 | 기술 |
 |------|------|
-| **Backend** | Java 17 · Spring Boot 3.5 · Spring Security + JWT · Spring Data JPA |
-| **Messaging / Cache / DB** | Apache Kafka · Redis · PostgreSQL |
-| **Realtime** | Server-Sent Events(SSE) · KIS WebSocket(체결가 H0STCNT0) |
-| **Observability** | Actuator · Micrometer · Prometheus · Grafana |
-| **Test / Infra** | JUnit 5 · H2/`@EmbeddedKafka`(기본) · **Testcontainers PostgreSQL(동시성)** · Docker Compose |
-| **Frontend** | Vue 3 · Vite · TypeScript · Pinia · Vue Router · axios |
+| Backend | Java 17, Spring Boot 3.5, Spring Security, JWT, Spring Data JPA |
+| Messaging / Cache | Apache Kafka, Redis |
+| Database | PostgreSQL, H2(test) |
+| Realtime | KIS WebSocket, Server-Sent Events(SSE) |
+| Observability | Actuator, Micrometer, Prometheus, Grafana |
+| Test / Infra | JUnit 5, `@EmbeddedKafka`, Testcontainers, Docker Compose |
+| Frontend | Vue 3, Vite, TypeScript, Pinia, Vue Router, axios |
 
 ---
 
-## 아키텍처 개요
-
-**하나의 시세 이벤트를 4개의 독립 Consumer group이 소비**한다 — 수집·저장·알림·스트리밍을 분리해
-DB 병목 없이 확장한다.
-
-```mermaid
-flowchart LR
-    subgraph SRC["시세 소스 · PriceSource 추상화"]
-        KIS["KIS WebSocket<br/>체결가 (국장·무지연)"]
-        YH["Yahoo REST<br/>(미장·폴백)"]
-    end
-    SRC --> ING["Collector /<br/>WS Ingest"]
-    ING --> K(("Kafka<br/>topic: stock-price<br/>partition key = 종목코드"))
-    K --> C1["price-cache"] --> R[("Redis<br/>최신가·랭킹·좋아요")]
-    K --> C2["price-analytics"] --> PG[("PostgreSQL<br/>시세 이력·영속")]
-    K --> C3["notification"] --> AL["조건 평가<br/>→ 알림 발화"]
-    K --> C4["price-stream"] --> SSE["SSE Emitter"]
-    SSE -->|EventSource push| WEB["Vue 3 UI<br/>틱 깜빡임·대표가격 롤링"]
-    WEB -->|REST + JWT| API["Spring API"]
-    API --- R
-    API --- PG
-```
-
-- **도메인 단위 패키지**: `{auth,user,stock,watchlist,price,recommendation,ranking,notification,…}` 각각이 `controller/service/domain/repository/dto`를 갖는다(전역 레이어 패키지 없음).
-- **레이어 규칙**: Controller → Service → Repository. **서비스는 API DTO를 받지도 반환하지도 않는다** — 입력은 `Command`, 출력은 도메인/결과 모델(도메인 타입 유지)이고 표현용 평탄화는 응답 DTO의 `from()`이 전담.
-- **이벤트 기반**: 실시간 시세는 Kafka로 비동기 수집·분산 소비(파티션 키=종목코드로 종목별 순차 보장).
-- **Cache-Aside**: 조회 성능이 중요한 데이터는 Redis 우선, DB 폴백.
-
----
-
-## 기술 실증 — "왜 이 기술을 썼나"
-
-| 주제 | 문제 | 해법 (코드) |
-|------|------|-------------|
-| **Kafka** | 초당 유입되는 시세를 API가 직접 DB에 넣으면 병목 | 수집→Kafka→Consumer로 분리, 한 토픽을 **4개 group**(캐시/이력/알림/스트림)이 독립 소비 |
-| **Redis ZSET** | 인기 랭킹을 `ORDER BY count DESC`로 매번 조회하면 느림 | Sorted Set `ZINCRBY`/`ZREVRANGE`로 O(logN) 랭킹 |
-| **Redis Set** | 다수 동시 좋아요 시 lost update·중복 | `SADD` 멱등(1인 1좋아요) + `SCARD` 정확 집계, 배치로 DB 동기화 |
-| **동시성 제어** | 다수 동시 관심등록 시 watch_count 갱신 손실 | DB 원자적 `UPDATE ... SET watch_count = watch_count + 1`. **운영과 같은 PostgreSQL(Testcontainers)에서 50스레드 동시 등록 → 갱신 손실 0 증명** |
-| **Cache-Aside** | 추천 계산 비용 | Redis 캐시 우선·미스 시 계산 후 캐싱(TTL), 성향 변경 시 무효화, hit/miss 메트릭으로 적중률 관측 |
-| **이벤트 드리븐** | 시세 조건 알림 | 시세 이벤트 소비 → 조건 평가 → 원자적 `ACTIVE→TRIGGERED`로 1회만 발화 |
-| **SSE / WebSocket** | 폴링 지연 없이 실시간 반영 | Kafka `price-stream` group → SSE push, KIS WebSocket 체결가로 진짜 틱 스트리밍 |
-| **관측성** | 아키텍처 효과를 수치로 증명 | Micrometer 커스텀 메트릭 → Prometheus → Grafana 대시보드 |
-
----
-
-## 🧗 엔지니어링 도전 & 극복
-
-실제로 부딪혀 해결한 문제들 (문제 → 원인 → 해결 → 결과).
-
-### 1. KIS 실전 API 초당 제한을 WebSocket 승격으로 근본 해결
-- **문제**: 한국투자증권 REST로 국내 다수 종목을 폴링하자 초당 거래건수 초과 에러(`EGW00201`) 지속 발생.
-- **원인**: 쓰로틀(250→1200ms)·재시도를 붙여도 미해결. **단발 프로브는 통과하나 다수 종목 지속 폴링은 누적 감지에 걸림** → REST 폴링 자체가 다수 종목 실시간에 부적합, 재시도는 부하를 키우는 역효과임을 실측으로 규명.
-- **해결**: 자바 단일 파일 프로브로 **WebSocket 체결가(H0STCNT0) wire 포맷(레코드당 46필드)을 실측·확정**한 뒤 폴링을 WS 구독으로 대체. 프래그먼트 누적·PINGPONG·자동 재연결 구현, 실측 프레임으로 파싱 단위테스트 작성.
-- **결과**: rate 에러 **0건**, **지연 없는 틱 단위 실시간** 달성.
-
-### 2. 실시간 수집기 프리즈 — 단일 스케줄러 스레드 블로킹 규명
-- **문제**: 실행 하루 뒤 시세가 어제 값에 멈춤.
-- **원인**: 외부 HTTP 클라이언트에 **타임아웃이 없어** 응답 없는 요청 하나가 단일 `@Scheduled` 스레드를 영구 블로킹 → 전체 수집 정지.
-- **해결**: 연결/읽기 타임아웃 + 종목 단위 예외 격리(한 종목 실패가 전체를 막지 않도록).
-- **배움**: "외부 HTTP는 반드시 타임아웃, 특히 단일 스레드 스케줄러" — 운영 견고성 원칙 체득.
-
-### 3. 폴링 → 이벤트 push로 실시간 UX 전환
-- **문제**: 프론트 폴링이라 시세가 화면에 즉시 반영되지 않음.
-- **해결**: Kafka의 "하나의 이벤트, 다수 Consumer" 구조를 확장해 **SSE 전용 Consumer group** 추가 → 서버가 브라우저로 틱 push. UI에는 증권앱 관습(상승 빨강/하락 파랑) **깜빡임** + 대표가격 **롤링 애니메이션** 적용.
-- **결과**: 폴링 제거, 체결 즉시 반영. (디버깅 중 "SSE 0틱" 오진은 백그라운드 curl 버퍼링 문제였고 엔드포인트는 정상 — **검증 방법 자체의 함정**을 로그로 규명.)
-
-### 4. 인터페이스 추상화로 시세 소스 무중단 승격
-- 시세 공급을 `PriceSource`로 추상화한 덕에 **랜덤 목 → 야후 → KIS 실시간** 승격이 **구현체 교체 + 프로퍼티 스위치만으로** 완료. Kafka·캐시·SSE·알림·추천 등 **나머지 파이프라인은 무변경** — 설계 의도(확장성)를 실제 승격으로 증명.
-
-### 5. 실 인프라 없이 통과하는 테스트 전략
-- 외부 의존이 많음에도 CI에서 인프라 없이 통과: **H2** + `@EmbeddedKafka` + Redis `@MockitoBean`. 외부 API는 조회/파싱을 분리해 **실제 응답 샘플로 파싱 단위테스트**.
-- Testcontainers 테스트는 `disabledWithoutDocker`로 **Docker가 없으면 자동 skip** → "인프라 없이 `./gradlew test` 통과" 규칙을 깨지 않으면서 운영 DB 검증을 얹었다. → **테스트 149개 green**.
-
-### 6. 코드 리뷰 피드백을 구조 개선으로 (v1.2.0)
-외부 리뷰에서 "레이어드 구조에 도메인 개념을 얹은 단계"라는 평을 받고, 지적을 4단계로 나눠 해소했다. **각 단계는 브랜치를 분리하고 테스트 green을 확인한 뒤 병합**했다.
-
-- **규칙이 있어야 할 자리로** — 전일 대비 등락 계산이 응답 DTO **3곳에 복제**돼 있던 것을 `PriceChange` 값 객체로 통합. 성향별 가중치는 계산기의 `switch`에서 꺼내 `RiskProfile` enum이 직접 소유하게 했다(성향 추가 시 enum만 확장).
-- **HTTP 계약과 유스케이스 분리** — 서비스가 `SignupRequest`/`SignupResponse`를 직접 받고 반환하던 것을 `Command` 입력 + 결과 모델 출력으로 바꿔 **전 서비스 API DTO 의존 0건**. 결과 모델은 `MarketType`·`PriceChange`·`RiskProfile` 같은 **도메인 타입을 유지**하고, 문자열 평탄화·null 분해는 응답 DTO가 맡는다. Redis 캐시에 저장하는 것도 API DTO가 아닌 결과 모델이다.
-- **동시성 근거를 운영 DB로** — 갱신 손실 방지는 DB 엔진의 락 동작에 기대는데 H2 검증만으로는 근거가 약했다. **Testcontainers PostgreSQL**에서 50스레드 동시 등록(갱신 손실 0), 중복 등록 1건만 성공(실패가 카운트를 올리지 않음), 등록/해제 혼재 시 row 수 일치까지 재검증.
-- **문서와 구현의 불일치 제거** — 문서는 `@Version` 낙관적 락이라 적혀 있었으나 실제는 DB 원자적 UPDATE였다. 문서를 구현에 맞추고 **왜 `@Version`을 쓰지 않는지**(경합 잦은 카운터는 재시도 비용만 증가) 근거를 명시.
-
----
-
-## 실시간 & 프론트엔드
-
-- **시세 반영**: Kafka `price-stream` → SSE(`/api/stocks/stream`) → 프론트 `EventSource`. 목록은 **틱 깜빡임**, 상세 대표가격은 **카운트업 롤링**.
-- **국장 실시간**: KIS WebSocket 체결가(무지연). **미장은 야후**(KIS 해외 실시간은 별도 신청) — 하이브리드.
-- **프론트**: Vue 3 + Vite + TS. 홈(검색·시장 필터·장 세션 표시) / 상세(캔들차트·52주 게이지·종목정보·가격알림) / 추천(매칭 점수) / 알림 / 마이.
-
----
-
-## 릴리스 히스토리
-
-각 기능은 코드 + 테스트 + 실 인프라 라이브 검증 후 태그로 릴리스했다.
-
-| 릴리스 | 기능 | 실증하는 것 |
-|--------|------|-------------|
-| v0.1.0 | 회원가입 | BCrypt, 유니크 제약 동시성 방어, 글로벌 예외 처리 |
-| v0.2.0 | 로그인 / JWT | 무상태 인증, JWT 필터, 보호 자원 |
-| v0.3.0 | 관심종목 등록/해제 | **동시성**: watch_count 원자적 UPDATE(갱신 손실 0) |
-| v0.4.0 | Kafka 실시간 시세 수집 | 수집·저장 분리, 다중 Consumer 분산 소비 |
-| v0.5.0 | 성향 기반 추천 | 가중치 스코어링 + **Cache-Aside**(Redis TTL) |
-| v0.6.0 | 인기 랭킹 · 좋아요 | Redis **ZSET**(ZINCRBY/ZREVRANGE) · **Set**(SADD 멱등) |
-| v0.7.0 | 이벤트 드리븐 알림 | 시세 이벤트 → 조건 평가, 원자적 발화(중복 방지) |
-| v0.8.0 | 관측성 / 성능 | Micrometer 커스텀 메트릭 + Grafana 대시보드 |
-| v0.9.0 | Yahoo 실 시세 연동 | `PriceSource` 교체만으로 목→실 데이터 전환 |
-| **v1.0.0** | **Vue 프론트 + KIS 실시간 + SSE** | 실시간 UX(틱 깜빡임), KIS REST 하이브리드, 서버 push |
-| **v1.1.0** | **상세 롤링 + KIS WebSocket 체결가** | 대표가격 롤링, WS 틱 스트리밍(초당 제한 완전 제거) |
-| **v1.2.0** | **도메인 구조 정렬 + 운영 DB 동시성 검증** | 도메인 패키지·Command 분리·규칙 객체화, Testcontainers PostgreSQL 동시성 |
-
----
-
-## 주요 API
-
-인증 필요 엔드포인트는 `Authorization: Bearer <accessToken>` 헤더를 요구한다.
-
-| 도메인 | 메서드 · 경로 | 인증 |
-|--------|--------------|:---:|
-| 인증 | `POST /api/auth/signup` · `POST /api/auth/login` | 공개 |
-| 사용자 | `GET /api/users/me` · `PATCH /api/users/me`(성향 변경) | 🔒 |
-| 종목 | `GET /api/stocks`(목록·검색 `?q=`) · `GET /api/stocks/{code}` | 공개 |
-| 시세 | `GET /api/stocks/{code}/chart` · `.../quote` · **`GET /api/stocks/stream`(SSE)** | 공개 |
-| 관심종목 | `POST`·`DELETE /api/stocks/{id}/watch` · `GET /api/me/watchlist` | 🔒 |
-| 추천 | `GET /api/recommendations` | 🔒 |
-| 좋아요 | `POST`·`DELETE /api/stocks/{code}/like` · `GET /api/stocks/{code}/likes` | 🔒 / 공개 |
-| 랭킹 | `POST /api/stocks/{code}/view` · `GET /api/rankings/popular` | 공개 |
-| 알림 | `POST`·`GET /api/alerts` · `GET /api/notifications` | 🔒 |
-| 메트릭 | `GET /actuator/prometheus` | 공개 |
-
----
-
-## 실시간 시세 소스
-
-`PriceSource` 인터페이스로 추상화되어 **구현체 교체만으로** 목↔실 데이터를 전환한다.
-`stockpilot.price.source`(환경변수 `PRICE_SOURCE`)로 선택.
-
-| 값 | 소스 | 비고 |
-|----|------|------|
-| `kis` | 한국투자증권(하이브리드) | **국장 실시간 무지연**, 미장은 야후. 앱키/OAuth 필요. `KIS_WEBSOCKET_ENABLED=true`면 국장 WS 체결가 스트리밍 |
-| `yahoo` (기본) | Yahoo Finance | 국장 `.KS`/`.KQ`, 약 15분 지연, 키 불필요 |
-| `random` | 랜덤워크 목 | 외부 의존 없음(오프라인/CI). 테스트는 항상 이 값 |
+## 실행 방법
 
 ```bash
-./gradlew bootRun                       # 기본: 야후 실 시세
-PRICE_SOURCE=random ./gradlew bootRun    # 외부 의존 없이 목 시세
-
-# KIS 실시간 — 앱키는 절대 커밋 금지, 환경변수로만 주입
-KIS_APP_KEY=... KIS_APP_SECRET=... PRICE_SOURCE=kis ./gradlew bootRun
-# WebSocket 체결가 스트림(권장)
-KIS_APP_KEY=... KIS_APP_SECRET=... PRICE_SOURCE=kis KIS_WEBSOCKET_ENABLED=true ./gradlew bootRun
-```
-
----
-
-## 로컬 실행
-
-```bash
-# 1. 인프라 기동 (Postgres · Redis · Kafka · Kafka-UI · Prometheus · Grafana)
+# 1. 인프라 기동
 docker compose up -d
 
-# 2. 백엔드
+# 2. 백엔드 실행
 ./gradlew bootRun
 
-# 3. 프론트엔드
-cd frontend && npm install && npm run dev   # http://localhost:5173
+# 3. 프론트엔드 실행
+cd frontend
+npm install
+npm run dev
 
-# 4. 테스트 — 인프라 없이도 통과한다(H2 프로파일).
-#    Docker가 있으면 동시성 테스트가 실제 PostgreSQL(Testcontainers)로 함께 돌고,
-#    없으면 해당 테스트만 자동 skip된다.
+# 4. 테스트
 ./gradlew test
 ```
 
 | 서비스 | 주소 |
 |--------|------|
-| App (API) | http://localhost:8080 |
+| API | http://localhost:8080 |
 | Frontend | http://localhost:5173 |
 | Prometheus 메트릭 | http://localhost:8080/actuator/prometheus |
 | Kafka UI | http://localhost:8081 |
 | Prometheus | http://localhost:9090 |
-| Grafana | http://localhost:3000 (admin/admin) — "StockPilot 관측성" 대시보드 자동 프로비저닝 |
+| Grafana | http://localhost:3000 |
 
 ---
 
-## AI 개발 파이프라인 (GitHub Actions)
+## 시세 소스 설정
 
-이 저장소는 GitHub Issue 하나를 자동으로 PR로 전환하는 **자가치유(self-healing) 5-에이전트
-파이프라인**을 사용한다. 모든 단계는 **이슈 라벨**로 트리거되며, Reviewer가 반려하면 Fix
-에이전트가 스스로 패치를 시도(최대 3회)한 뒤 초과 시 사람에게 넘긴다.
+`stockpilot.price.source` 또는 환경변수 `PRICE_SOURCE`로 시세 소스를 선택합니다.
 
+| 값 | 설명 |
+|----|------|
+| `random` | 외부 API 없이 동작하는 목 시세. 테스트와 오프라인 실행에 사용 |
+| `yahoo` | Yahoo Finance REST 기반 시세 조회. 기본값 |
+| `kis` | KIS 기반 시세 조회. `KIS_WEBSOCKET_ENABLED=true`이면 국내 종목은 WebSocket 체결가를 사용 |
+
+```bash
+# 외부 의존 없이 실행
+PRICE_SOURCE=random ./gradlew bootRun
+
+# Yahoo REST 사용
+PRICE_SOURCE=yahoo ./gradlew bootRun
+
+# KIS WebSocket 사용
+KIS_APP_KEY=... \
+KIS_APP_SECRET=... \
+PRICE_SOURCE=kis \
+KIS_WEBSOCKET_ENABLED=true \
+./gradlew bootRun
 ```
-Issue +plan ─▶ Planner ─(design)▶ Architect ─(implement)▶ Implementer ─▶ PR + review 라벨
-                                                                              │
-   ┌──────────────────────────────────────────────────────────────────────   ▼
-   │  Reviewer  ①빌드·테스트 게이트(./gradlew test)  →  ②통과 시에만 Claude 리뷰
-   │      ├─ APPROVED  → develop 자동 병합 + done
-   │      └─ REJECTED  → Fix 자가치유(리뷰/빌드 로그로 패치 → retry) → 3회 초과 시 사람 인계
-```
 
-- 트리거는 전부 **이슈 라벨**(`plan`→`design`→`implement`→`review`). 라벨 권한(triage 이상)이 곧 접근제어.
-- 각 에이전트는 `.claude/agents/*.md` 프롬프트로 Claude API를 호출하고, 산출물을 오케스트레이션 서버에 등록한다.
-- **신뢰성 장치**: (1) Claude 리뷰 전 CI에서 실제 `./gradlew test`로 컴파일·회귀 선차단, (2) 기존 소스 목록 + 핵심 연동 파일을 프롬프트에 주입해 기존 코드 보존.
+KIS 앱키와 시크릿은 코드나 설정 파일에 직접 저장하지 않고 환경변수로만 주입합니다.
 
-> 프론트엔드는 실시간 UX 반복이 잦아 파이프라인 대신 직접 구현했다. 세부 배경은 커밋 히스토리 참고.
+---
+
+## 주요 API
+
+인증이 필요한 엔드포인트는 `Authorization: Bearer <accessToken>` 헤더를 사용합니다.
+
+| 도메인 | 메서드 · 경로 | 인증 |
+|--------|--------------|:---:|
+| 인증 | `POST /api/auth/signup`, `POST /api/auth/login` | 공개 |
+| 사용자 | `GET /api/users/me`, `PATCH /api/users/me` | 필요 |
+| 종목 | `GET /api/stocks`, `GET /api/stocks/{code}` | 공개 |
+| 시세 | `GET /api/stocks/{code}/chart`, `GET /api/stocks/{code}/quote`, `GET /api/stocks/stream` | 공개 |
+| 관심종목 | `POST /api/stocks/{id}/watch`, `DELETE /api/stocks/{id}/watch`, `GET /api/me/watchlist` | 필요 |
+| 추천 | `GET /api/recommendations` | 필요 |
+| 좋아요 | `POST /api/stocks/{code}/like`, `DELETE /api/stocks/{code}/like`, `GET /api/stocks/{code}/likes` | 일부 필요 |
+| 랭킹 | `POST /api/stocks/{code}/view`, `GET /api/rankings/popular` | 공개 |
+| 알림 | `POST /api/alerts`, `GET /api/alerts`, `GET /api/notifications` | 필요 |
+| 메트릭 | `GET /actuator/prometheus` | 공개 |
+
+---
+
+## 릴리스 요약
+
+| 릴리스 | 주요 변화 |
+|--------|-----------|
+| v0.1.0 ~ v0.3.0 | 회원가입, 로그인/JWT, 관심종목 등록과 동시성 처리 |
+| v0.4.0 ~ v0.7.0 | Kafka 시세 수집, Redis 추천 캐시, 랭킹/좋아요, 이벤트 기반 알림 |
+| v0.8.0 ~ v0.9.0 | Prometheus/Grafana 관측성, Yahoo 시세 연동 |
+| v1.0.0 | Vue 프론트엔드, KIS REST 연동, SSE 기반 화면 갱신 |
+| v1.1.0 | KIS WebSocket 체결가 수신 추가, REST 폴링 중심 구조 보완 |
+| v1.2.0 | 도메인 패키지 정리, Command 분리, Testcontainers PostgreSQL 동시성 검증 |
+
+---
+
+## AI 도구 사용 범위
+
+AI 도구는 개발 과정에서 보조 수단으로 사용했습니다.
+
+- 코드 초안 작성, 테스트 케이스 아이디어 정리, README와 개발 문서 초안 작성에 활용했습니다.
+- 외부 API 호출 제한 분석, WebSocket 전환 판단, Kafka/Redis/SSE 책임 분리, 검증 기준은 직접 정의했습니다.
+- AI가 제안한 코드는 테스트 실행, 실행 로그 확인, 실제 API 응답 샘플 기반 파싱 검증을 거친 뒤 반영했습니다.
+
+---
+
+## AI 개발 파이프라인
+
+일부 백엔드 작업은 개인 프로젝트인 `dev-agent`에서 만든 GitHub Issue 기반 AI 개발 파이프라인을 실험적으로 사용했습니다. Issue 라벨로 계획, 설계, 구현, 리뷰 단계를 나누고, CI 테스트를 통과한 변경만 리뷰 대상으로 넘기는 방식입니다.
+
+다만 StockPilot의 핵심 의사결정은 외부 API 한계 분석, WebSocket 전환, 이벤트 처리 구조 설계, 테스트 기준 수립에 있으며, AI 파이프라인은 반복 구현과 문서화 보조에 한정해 사용했습니다. 자세한 파이프라인 설명은 `dev-agent` 프로젝트 README에서 다룹니다.
 
 ---
 
 ## 문서
 
-- 제품 비전 · 로드맵: [`docs/product/`](docs/product/)
-- 아키텍처: [`docs/architecture/architecture.md`](docs/architecture/architecture.md)
-- KIS 실시간 승격: [`docs/kis-integration.md`](docs/kis-integration.md)
-- 프론트 단계별 기록: [`docs/frontend/`](docs/frontend/)
+- 제품 비전과 로드맵: [`docs/product/`](docs/product/)
+- 아키텍처 기준: [`docs/architecture/architecture.md`](docs/architecture/architecture.md)
+- KIS 연동 기록: [`docs/kis-integration.md`](docs/kis-integration.md)
+- 프론트엔드 단계별 기록: [`docs/frontend/`](docs/frontend/)
