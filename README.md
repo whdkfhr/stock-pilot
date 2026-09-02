@@ -3,7 +3,7 @@
 외부 시세 API의 호출 제한을 겪으며 REST 폴링 구조의 한계를 확인하고, WebSocket 수집과 Kafka 기반 처리 흐름으로 전환한 실시간 데이터 처리 학습 프로젝트입니다.
 
 ![release](https://img.shields.io/badge/release-v1.2.0-blue)
-![tests](https://img.shields.io/badge/tests-149%20green-success)
+![tests](https://img.shields.io/badge/tests-153%20green-success)
 ![java](https://img.shields.io/badge/Java-17-orange)
 ![springboot](https://img.shields.io/badge/Spring%20Boot-3.5-6DB33F)
 
@@ -145,7 +145,7 @@ flowchart LR
 - `http://localhost:8080/actuator/prometheus`에서 Prometheus 포맷 메트릭이 `200 OK`로 노출됨
 - Prometheus `up` 쿼리에서 `stock-pilot (host.docker.internal:8080)` target이 `1`로 수집됨
 - Prometheus query API로 `jvm_memory_used_bytes`, `http_server_requests_seconds_count`, `kafka_consumer_fetch_manager_records_consumed_total` 수집 여부 확인
-- Grafana에 `StockPilot 관측성` 대시보드가 프로비저닝되고, HTTP 요청 처리량/지연 패널이 Prometheus 데이터를 조회하는 것 확인
+- Grafana에 `StockPilot 관측성` 대시보드가 프로비저닝되고, target up/JVM/HTTP/Kafka consumer 패널이 Prometheus 데이터를 조회하는 것 확인
 
 대시보드 산출물:
 
@@ -153,7 +153,7 @@ flowchart LR
 - 로컬 확인 캡처: [`docs/assets/grafana-dashboard.jpg`](docs/assets/grafana-dashboard.jpg)
 - 원본 프로비저닝 파일: [`monitoring/grafana/dashboards/stockpilot.json`](monitoring/grafana/dashboards/stockpilot.json)
 
-추천 캐시 hit/miss, 좋아요, 조회수, 알림 발화 같은 커스텀 비즈니스 메트릭은 관련 API 요청이 발생해야 값이 채워집니다. 이번 확인에서는 메트릭 노출과 수집 가능 여부, 기본 JVM/HTTP/Kafka consumer 메트릭 수집, Grafana 대시보드 로딩을 확인했습니다.
+추천 캐시 hit/miss, 좋아요, 조회수, 알림 발화 같은 커스텀 비즈니스 메트릭은 관련 API 요청이 발생해야 값이 채워집니다. 이번 확인에서는 메트릭 노출과 수집 가능 여부, JVM/HTTP/Kafka consumer 메트릭 수집, Grafana 대시보드 로딩을 확인했습니다.
 
 ---
 
