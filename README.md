@@ -114,7 +114,7 @@ flowchart LR
 - Redis Sorted Set 기반 인기 랭킹
 - Redis Set 기반 좋아요 멱등 처리
 - 가격 조건 알림 등록 및 시세 이벤트 기반 조건 평가
-- Prometheus/Grafana 기반 메트릭 확인
+- Actuator, Prometheus, Grafana를 통한 JVM/HTTP/Kafka 메트릭 노출 및 수집 확인
 
 ---
 
@@ -129,10 +129,31 @@ flowchart LR
 | Redis 의존 로직 | 테스트에서는 Redis를 mock 처리하고, 캐시/랭킹/좋아요 로직을 서비스 단위로 검증 |
 | 관심종목 동시성 | Testcontainers PostgreSQL에서 다중 스레드 등록/해제 시 카운트 정합성 확인 |
 | 외부 HTTP 안정성 | Yahoo/KIS REST 호출에 연결/읽기 타임아웃을 적용하고 종목 단위 예외 격리 |
-| 관측성 | Actuator/Micrometer 메트릭을 Prometheus로 수집하고 Grafana 대시보드에서 확인 |
+| 관측성 | 로컬 실행 기준 `/actuator/prometheus` 노출, Prometheus scrape, Grafana 대시보드 프로비저닝 확인 |
 | 프론트 실시간 반영 | Kafka 이벤트가 SSE로 전달되어 상세 화면의 가격 표시가 갱신되는지 실행 화면으로 확인 |
 
 현재 테스트는 로컬 인프라 없이도 기본적으로 통과하도록 구성했습니다. H2, `@EmbeddedKafka`, mock Redis를 사용하고, Docker가 있는 환경에서는 PostgreSQL Testcontainers 기반 동시성 테스트가 함께 실행됩니다.
+
+---
+
+## Observability
+
+로컬에서 `docker compose up -d`와 `PRICE_SOURCE=random ./gradlew bootRun`으로 실행한 뒤 관측성 연결을 확인했습니다.
+
+확인한 범위는 다음과 같습니다.
+
+- `http://localhost:8080/actuator/prometheus`에서 Prometheus 포맷 메트릭이 `200 OK`로 노출됨
+- Prometheus `up` 쿼리에서 `stock-pilot (host.docker.internal:8080)` target이 `1`로 수집됨
+- Prometheus query API로 `jvm_memory_used_bytes`, `http_server_requests_seconds_count`, `kafka_consumer_fetch_manager_records_consumed_total` 수집 여부 확인
+- Grafana에 `StockPilot 관측성` 대시보드가 프로비저닝되고, target up/JVM/HTTP/Kafka consumer 패널이 Prometheus 데이터를 조회하는 것 확인
+
+대시보드 산출물:
+
+- Grafana export: [`docs/observability/grafana-dashboard.json`](docs/observability/grafana-dashboard.json)
+- 로컬 확인 캡처: [`docs/assets/grafana-dashboard.jpg`](docs/assets/grafana-dashboard.jpg)
+- 원본 프로비저닝 파일: [`monitoring/grafana/dashboards/stockpilot.json`](monitoring/grafana/dashboards/stockpilot.json)
+
+추천 캐시 hit/miss, 좋아요, 조회수, 알림 발화 같은 커스텀 비즈니스 메트릭은 관련 API 요청이 발생해야 값이 채워집니다. 이번 확인에서는 메트릭 노출과 수집 가능 여부, JVM/HTTP/Kafka consumer 메트릭 수집, Grafana 대시보드 로딩을 확인했습니다.
 
 ---
 
@@ -144,7 +165,7 @@ flowchart LR
 | Messaging / Cache | Apache Kafka, Redis |
 | Database | PostgreSQL, H2(test) |
 | Realtime | KIS WebSocket, Server-Sent Events(SSE) |
-| Observability | Actuator, Micrometer, Prometheus, Grafana |
+| Observability | Spring Boot Actuator, Micrometer, Prometheus scrape config, Grafana provisioning/dashboard JSON |
 | Test / Infra | JUnit 5, `@EmbeddedKafka`, Testcontainers, Docker Compose |
 | Frontend | Vue 3, Vite, TypeScript, Pinia, Vue Router, axios |
 
@@ -174,8 +195,8 @@ npm run dev
 | Frontend | http://localhost:5173 |
 | Prometheus 메트릭 | http://localhost:8080/actuator/prometheus |
 | Kafka UI | http://localhost:8081 |
-| Prometheus | http://localhost:9090 |
-| Grafana | http://localhost:3000 |
+| Prometheus | http://localhost:9090 (`up`, `jvm_memory_used_bytes`, `http_server_requests_seconds_count` 등 확인) |
+| Grafana | http://localhost:3000 (`admin`/`admin`, `StockPilot 관측성` 대시보드 자동 로딩) |
 
 ---
 
@@ -263,4 +284,5 @@ AI 도구는 개발 과정에서 보조 수단으로 사용했습니다.
 - 제품 비전과 로드맵: [`docs/product/`](docs/product/)
 - 아키텍처 기준: [`docs/architecture/architecture.md`](docs/architecture/architecture.md)
 - KIS 연동 기록: [`docs/kis-integration.md`](docs/kis-integration.md)
+- 관측성 대시보드 export: [`docs/observability/grafana-dashboard.json`](docs/observability/grafana-dashboard.json)
 - 프론트엔드 단계별 기록: [`docs/frontend/`](docs/frontend/)
