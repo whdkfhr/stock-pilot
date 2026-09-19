@@ -59,11 +59,14 @@ public class WatchlistService {
     /** 관심종목을 해제하고 해제 시각을 돌려준다. */
     @Transactional
     public Instant unwatch(Long userId, Long stockId) {
-        watchlistRepository.findByUserIdAndStockId(userId, stockId)
-                .orElseThrow(() -> new WatchlistNotFoundException(userId, stockId));
-
-        watchlistRepository.deleteByUserIdAndStockId(userId, stockId);
-        stockRepository.decrementWatchCount(stockId);
+        int deleted = watchlistRepository.deleteByUserIdAndStockId(userId, stockId);
+        if (deleted == 0) {
+            throw new WatchlistNotFoundException(userId, stockId);
+        }
+        if (deleted != 1 || stockRepository.decrementWatchCount(stockId) != 1) {
+            // 카운트와 등록 내역이 불일치하면 삭제도 함께 롤백한다.
+            throw new IllegalStateException("관심종목 카운트 불일치: " + stockId);
+        }
 
         return Instant.now();
     }
