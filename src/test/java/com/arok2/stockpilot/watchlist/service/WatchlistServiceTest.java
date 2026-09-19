@@ -119,10 +119,8 @@ class WatchlistServiceTest {
     void unwatch_success_decrementsWatchCountOnce() {
         Long userId = 7L;
         Long stockId = 42L;
-        Watchlist existing = Watchlist.register(userId, stockId);
-        setId(existing, 1001L);
-
-        when(watchlistRepository.findByUserIdAndStockId(userId, stockId)).thenReturn(Optional.of(existing));
+        when(watchlistRepository.deleteByUserIdAndStockId(userId, stockId)).thenReturn(1);
+        when(stockRepository.decrementWatchCount(stockId)).thenReturn(1);
 
         Instant unwatchedAt = watchlistService.unwatch(userId, stockId);
 
@@ -136,13 +134,21 @@ class WatchlistServiceTest {
         Long userId = 7L;
         Long stockId = 42L;
 
-        when(watchlistRepository.findByUserIdAndStockId(userId, stockId)).thenReturn(Optional.empty());
+        when(watchlistRepository.deleteByUserIdAndStockId(userId, stockId)).thenReturn(0);
 
         assertThatThrownBy(() -> watchlistService.unwatch(userId, stockId))
                 .isInstanceOf(WatchlistNotFoundException.class);
 
-        verify(watchlistRepository, never()).deleteByUserIdAndStockId(any(), any());
         verify(stockRepository, never()).decrementWatchCount(any());
+    }
+
+    @Test
+    void unwatch_counterNotUpdated_throwsToRollBackDeletion() {
+        when(watchlistRepository.deleteByUserIdAndStockId(7L, 42L)).thenReturn(1);
+        when(stockRepository.decrementWatchCount(42L)).thenReturn(0);
+
+        assertThatThrownBy(() -> watchlistService.unwatch(7L, 42L))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test

@@ -1,6 +1,8 @@
 package com.arok2.stockpilot.watchlist.service;
 
 import com.arok2.stockpilot.stock.domain.Stock;
+import com.arok2.stockpilot.exception.WatchlistNotFoundException;
+import com.arok2.stockpilot.watchlist.domain.Watchlist;
 import com.arok2.stockpilot.stock.repository.StockRepository;
 import com.arok2.stockpilot.support.PostgresIntegrationTest;
 import com.arok2.stockpilot.watchlist.repository.WatchlistRepository;
@@ -14,13 +16,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 관심종목 동시 등록을 <b>운영과 동일한 PostgreSQL</b>에서 검증한다.
@@ -60,6 +65,57 @@ class WatchlistConcurrencyPostgresTest extends PostgresIntegrationTest {
     void tearDown() {
         watchlistRepository.deleteAll();
         stockRepository.deleteAll();
+    }
+
+    @Test
+    void concurrentUnwatch_decrementsOnlyForTheDeletedRow() throws Exception {
+        watchlistService.register(1L, stockId);
+        watchlistService.register(2L, stockId);
+        int attempts = 20;
+        ExecutorService executor = Executors.newFixedThreadPool(attempts);
+        CountDownLatch ready = new CountDownLatch(attempts);
+        CountDownLatch start = new CountDownLatch(1);
+        var futures = new ArrayList<Future<Boolean>>();
+        try {
+            for (int i = 0; i < attempts; i++) {
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    start.await();
+                    try {
+                        watchlistService.unwatch(1L, stockId);
+                        return true;
+                    } catch (WatchlistNotFoundException e) {
+                        return false;
+                    }
+                }));
+            }
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            int successes = 0;
+            for (var future : futures) {
+                if (future.get(30, TimeUnit.SECONDS)) successes++;
+            }
+            assertThat(successes).isEqualTo(1);
+            assertThat(watchlistRepository.count()).isEqualTo(1);
+            assertThat(watchlistRepository.existsByUserIdAndStockId(2L, stockId)).isTrue();
+            assertThat(stockRepository.findById(stockId).orElseThrow().getWatchCount()).isEqualTo(1);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void unwatch_inconsistentCounter_rollsBackDeletion() {
+        // 카운트 증가 없이 행만 저장해 불일치 상황을 재현한다.
+        watchlistRepository.saveAndFlush(
+                Watchlist.register(1L, stockId));
+
+        assertThatThrownBy(() -> watchlistService.unwatch(1L, stockId))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(watchlistRepository.existsByUserIdAndStockId(1L, stockId)).isTrue();
+        assertThat(stockRepository.findById(stockId).orElseThrow().getWatchCount()).isZero();
     }
 
     @Test
